@@ -1,0 +1,27 @@
+id,abbrev,name
+1,ALA,Alaska/N.W. Canada
+2,CGI,Canada/Greenl./Icel.
+3,WNA,W. North America
+4,CNA,C. North America
+5,ENA,E. North America
+6,CAM,Central America/Mexico
+7,AMZ,Amazon
+8,NEB,N.E. Brazil
+9,WSA,Coast South America
+10,SSA,S.E. South America
+11,NEU,N. Europe
+12,CEU,C. Europe
+13,MED,S. Europe/Mediterranean
+14,SAH,Sahara
+15,WAF,W. Africa
+16,EAF,E. Africa
+17,SAF,S. Africa
+18,NAS,N. Asia
+19,WAS,W. Asia
+20,CAS,C. Asia
+21,TIB,Tibetan Plateau
+22,EAS,E. Asia
+23,SAS,S. Asia
+24,SEA,S.E. Asia
+25,NAU,N. Australia
+26,SAU,S. Australia/New Zealand

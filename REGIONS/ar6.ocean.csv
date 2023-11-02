@@ -1,0 +1,16 @@
+id,abbrev,name
+1,CAR,Caribbean
+2,MED,Mediterranean
+3,SEA,S.E.Asia
+4,ARO,Arctic-Ocean
+5,NPO,N.Pacific-Ocean
+6,EPO,Equatorial.Pacific-Ocean
+7,SPO,S.Pacific-Ocean
+8,NAO,N.Atlantic-Ocean
+9,EAO,Equatorial.Atlantic-Ocean
+10,SAO,S.Atlantic-Ocean
+11,ARS,Arabian-Sea
+12,BOB,Bay-of-Bengal
+13,EIO,Equatorial.Indic-Ocean
+14,SIO,S.Indic-Ocean
+15,SOO,Southern-Ocean
