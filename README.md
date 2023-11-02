@@ -14,6 +14,7 @@ UEA impact study to generate a global wildfire atlas with FireCrew
 * `plot_ipcc_ar6_region_classifications.py` - Python script to extract IPCC AR6 region masks and plot classification on world map
 * `plot_ipcc_ar6_land_aggregated_timeseries.py` - Python script to aggregrate total variable monthly and yearly sampled timeseries per IPCC AR6 region
 * `plot_ipcc_ar6_land_aggregated_timeseries_stats.py` - Python script to compute gridcell stats for each monthly and yearly sampled variable per IPCC AR6 region
+* `create_ipcc_ar6_region_svg.py` - Python script to proudce a SVG world map for IPCC AR6 land regions
 
 The first step is to clone the latest fire-atlas repo and step into the check out directory: 
 
@@ -31,6 +32,7 @@ The code was tested locally in a Python 3.8.16 virtual environment.
     $ python convert_netcdf_SN_2_NS.py
     $ python plot_ipcc_ar6_land_aggregated_timeseries.py
     $ python plot_ipcc_ar6_land_aggregated_timeseries_stats.py (optional)
+    $ python plot_ipcc_ar6_land_region_svg.py
         
 ## License
 
