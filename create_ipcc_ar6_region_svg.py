@@ -83,7 +83,13 @@ def plot_regions( regiontypestr, option_kws, p, filetype, dpi):
 # PLOT: region classifications
 #----------------------------------------------------------------------------
 
-plot_regions( 'ar6.land', "add_land=True, add_ocean=True, add_label=False", p, filetype, dpi)
+text_kws = dict(color="#67000d", fontsize=7, bbox=dict(pad=0.2, color="w"))
+
+#plot_regions( 'ar6.land', "add_land=False, add_ocean=False, add_label=True", p, filetype, dpi)
+#plot_regions( 'ar6.land', "add_land=False, add_ocean=False, label_multipolygon='all'", p, filetype, dpi)
+plot_regions( 'ar6.land', "text_kws=text_kws, add_land=False, add_ocean=False, add_label=True", p, filetype, dpi)
+#plot_regions( 'ar6.land', "text_kws=text_kws, add_land=False, add_ocean=False, label_multipolygon='all'", p, filetype, dpi)
+
 
 #----------------------------------------------------------------------------
 print('** END')
