@@ -13,6 +13,8 @@
 
 import numpy as np
 import pandas as pd
+import xarray as xr
+import regionmask
 import datetime
 
 # Plotting libraries:
@@ -40,6 +42,28 @@ dpi = 300
 bg_color = 'red'
 bg_color2 = 'yellow'
 
+latstep = 0.25
+lonstep = 0.25
+lons = np.arange( -180 + (lonstep/2), 180 + (lonstep/2), lonstep )
+lats = np.arange( -90 + (latstep/2), 90 + (latstep/2), latstep )
+lats = lats[::-1]
+
+use_projection = 'platecarree' # see projection list below
+
+# SET: projection
+    
+if use_projection == 'equalearth': p = ccrs.EqualEarth(central_longitude=0)
+if use_projection == 'europp': p = ccrs.EuroPP()
+if use_projection == 'geostationary': p = ccrs.Geostationary(central_longitude=0)
+if use_projection == 'goodehomolosine': p = ccrs.InterruptedGoodeHomolosine(central_longitude=0)
+if use_projection == 'lambertconformal': p = ccrs.LambertConformal(central_longitude=0)
+if use_projection == 'mollweide': p = ccrs.Mollweide(central_longitude=0)
+if use_projection == 'northpolarstereo': p = ccrs.NorthPolarStereo()
+if use_projection == 'orthographic': p = ccrs.Orthographic(0,0)
+if use_projection == 'platecarree': p = ccrs.PlateCarree(central_longitude=0)
+if use_projection == 'robinson': p = ccrs.Robinson(central_longitude=0)
+if use_projection == 'southpolarstereo': p = ccrs.SouthPolarStereo()    
+
 #------------------------------------------------------------------------------
 # METHODS
 #------------------------------------------------------------------------------
@@ -63,144 +87,126 @@ def blank_axes(ax):
     ax.set_yticks([])
 
 #------------------------------------------------------------------------------
-# INITIALISE: figure instance (outer frame)
+# LOAD: IPCC AR6 land
 #------------------------------------------------------------------------------
 
-cm = 1 / 2.54
-fig = plt.figure(figsize=(5*cm,9*cm))        
-        
-left, bottom, width, height = -0.05, -0.05, 1.1, 1.05
-rect = [left,bottom,width,height]
-ax3 = plt.axes(rect)
-blank_axes(ax3)
+text_kws = dict(color="#67000d", fontsize=16, bbox=dict(pad=0.2, color="w"))    
 
-# SET: desired axis elements (optional)
+ar6_land = regionmask.defined_regions.ar6.land
+region_mask = regionmask.defined_regions.ar6.land.mask_3D(lons, lats)        
+region_names = regionmask.defined_regions.ar6.land.names
+region_abbrevs = regionmask.defined_regions.ar6.land.abbrevs
 
-ax3.spines['right'].set_visible(True)
-ax3.spines['top'].set_visible(True)
-ax3.spines['bottom'].set_visible(True)
-ax3.spines['left'].set_visible(True)
-ax3.text(0.15, 0.07, 'Michael Taylor, CRU/UEA -- ' + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), fontsize=4)
+#------------------------------------------------------------------------------
+# LOOP: over regions
+#------------------------------------------------------------------------------
 
-# DRAW: rounded rectangle inside filled background rectangle
+for i in region_mask.region.values:
+                
+    lats = region_mask.isel(region=i).lat.values
+    lons = region_mask.isel(region=i).lon.values
+    Y,X = np.meshgrid( lons, lats )    
+    mask = region_mask.isel(region=i)
+    latmin = X[mask].min()
+    latmax = X[mask].max()
+    lonmin = Y[mask].min()
+    lonmax = Y[mask].max()
 
-rounded_rect = FancyBboxPatch((0.1, 0.1), 0.8, 0.8, boxstyle='Round, pad=0, rounding_size=0.05', color=bg_color2, alpha = 0.5)
-rect = Rectangle((0, 0), width, 1, color=bg_color)
-ax3.add_patch(rect)
-ax3.add_patch(rounded_rect)
+    figstr = 'ipcc-ar6-land-region-card-' + str(i+1).zfill(2) + '.png'
+    titlestr = region_names[i] 
+
+    #------------------------------------------------------------------------------
+    # INITIALISE: figure instance (outer frame)
+    #------------------------------------------------------------------------------
     
-#------------------------------------------------------------------------------
-# PLOT: spatial data
-#------------------------------------------------------------------------------
-
-left, bottom, width, height = 0.2, 0, 0.7, 0.9
-rect = [left,bottom,width,height]
-
-ax = plt.axes(rect, projection=ccrs.PlateCarree(), )
-ax.set_extent((110,160, -45, -10))
-ax.stock_img()
-ax.add_feature(cfeature.LAND)
-ax.add_feature(cfeature.OCEAN)
-ax.add_feature(cfeature.COASTLINE)
-blank_axes(ax)
-
-#------------------------------------------------------------------------------
-# PLOT: location map and highlight spatial data inset region
-#------------------------------------------------------------------------------
-
-left, bottom, width, height = 0.02, 0, 0.16, 0.2
-rect = [left,bottom,width,height]
-
-ax2 = plt.axes(rect, projection=ccrs.PlateCarree(), )
-ax2.set_global()
-ax2.add_feature(cfeature.LAND)
-ax2.add_feature(cfeature.OCEAN)
-lon0,lon1,lat0,lat1 = ax.get_extent()
-box_x = [lon0, lon1, lon1, lon0, lon0]
-box_y = [lat0, lat0, lat1, lat1, lat0]
-plt.plot(box_x, box_y, color='red', lw=0.5, transform=ccrs.PlateCarree())
-blank_axes(ax2)
-
-#------------------------------------------------------------------------------
-# PLOT: inset connector lines
-#------------------------------------------------------------------------------
-
-mark_inset(ax2, ax, loc1=2, loc2=4, fc="none", ec="0.5")
-
-#------------------------------------------------------------------------------
-# PLOT: title
-#------------------------------------------------------------------------------
-
-left, bottom, width, height = 0.1, 0.95, 0.8, 0.04
-rect = [left,bottom,width,height]
-
-ax6 = plt.axes(rect)
-ax6.set_facecolor(bg_color)
-ax6.text(0.5, 0.0,'IPCC Region Card', ha='center', color='white', fontsize=fontsize)
-blank_axes(ax6)
-
-#------------------------------------------------------------------------------
-# PLOT: N arrow
-#------------------------------------------------------------------------------
-
-'''
-left, bottom, width, height = 0.7, 0.7, 0.1, 0.05
-rect = [left,bottom,width,height]
-
-ax4 = plt.axes(rect)
-ax4.set_facecolor(bg_color2)
-ax4.text(0.5, 0.0,u'\u25B2 \nN ', ha='center', color='white', fontsize=10, family='Arial', rotation = 0)
-blank_axes(ax4)
-
-#------------------------------------------------------------------------------
-# PLOT: legend
-#------------------------------------------------------------------------------
-# legends can be quite long, so set near top of map (0.4 - bottom + 0.5 height = 0.9 - near top)
-
-left = 0
-bottom = 0.4
-width = 0.16
-height = 0.5
-rect = [left,bottom,width,height]
-rect = [left,bottom,width,height]
-ax5 = plt.axes(rect)
-
-# create an array of color patches and associated names for drawing in a legend
-colors = sorted(cartopy.feature.COLORS.keys())
-handles = []
-names = []
-# for each cartopy defined color, draw a patch, append handle to list, and append color name to names list
-for c in colors:
-    patch = mpatches.Patch(color=cfeature.COLORS[c], label=c)
-    handles.append(patch)
-    names.append(c)
-
-# do some example lines with colors
-river = mlines.Line2D([], [], color=cfeature.COLORS['water'], marker='',
-                              markersize=15, label='river')
-coast = mlines.Line2D([], [], color='black', marker='',
-                              markersize=15, label='coast')
-bdy  = mlines.Line2D([], [], color='grey', marker='',
-                      markersize=15, label='state boundary')
-handles.append(river)
-handles.append(coast)
-handles.append(bdy)
-names.append('river')
-names.append('coast')
-names.append('state boundary')
-
-# create legend
-ax5.legend(handles, names)
-ax5.set_title('Legend',loc='left')
-blank_axes(ax5)
-'''
-
-#------------------------------------------------------------------------------
-# SAVE: region card
-#------------------------------------------------------------------------------
-
-plt.savefig( 'region_card.png', dpi=dpi )    
+    cm = 1 / 2.54
+    fig = plt.figure(figsize=(5*cm,9*cm))        
+            
+    left, bottom, width, height = -0.05, -0.05, 1.1, 1.05
+    rect = [left,bottom,width,height]
+    ax3 = plt.axes(rect)
+    blank_axes(ax3)
+    
+    # SET: desired axis elements (optional)
+    
+    ax3.spines['right'].set_visible(True)
+    ax3.spines['top'].set_visible(True)
+    ax3.spines['bottom'].set_visible(True)
+    ax3.spines['left'].set_visible(True)
+    ax3.text(0.15, 0.07, 'Michael Taylor, CRU/UEA -- ' + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), fontsize=4)
+    
+    # DRAW: rounded rectangle inside filled background rectangle
+    
+    rounded_rect = FancyBboxPatch((0.1, 0.1), 0.8, 0.8, boxstyle='Round, pad=0, rounding_size=0.05', color=bg_color2, alpha = 0.5)
+    rect = Rectangle((0, 0), width, 1, color=bg_color)
+    ax3.add_patch(rect)
+    ax3.add_patch(rounded_rect)
+        
+    #------------------------------------------------------------------------------
+    # PLOT: spatial data
+    #------------------------------------------------------------------------------
+    
+    left, bottom, width, height = 0.2, 0, 0.7, 0.9
+    rect = [left,bottom,width,height]
+    
+    ax = plt.axes(rect, projection = p)
+    ar6_land[[i]].plot(
+            add_ocean=True,
+            add_land=True,
+            resolution="50m",
+            projection=p,
+            label="abbrev",
+            text_kws=text_kws,
+    )
+    #ax.set_extent((110,160, -45, -10))
+    #ax.stock_img()
+    #ax.add_feature(cfeature.LAND)
+    #ax.add_feature(cfeature.OCEAN)
+    #ax.add_feature(cfeature.COASTLINE)
+    blank_axes(ax)
+    
+    #------------------------------------------------------------------------------
+    # PLOT: location map and highlight spatial data inset region
+    #------------------------------------------------------------------------------
+    
+    left, bottom, width, height = 0.02, 0, 0.16, 0.2
+    rect = [left,bottom,width,height]
+    
+    ax2 = plt.axes(rect, projection = p)
+    ax2.set_global()
+    ax2.add_feature(cfeature.LAND)
+    ax2.add_feature(cfeature.OCEAN)
+    lon0,lon1,lat0,lat1 = ax.get_extent()
+    box_x = [lon0, lon1, lon1, lon0, lon0]
+    box_y = [lat0, lat0, lat1, lat1, lat0]
+    plt.plot(box_x, box_y, color='red', lw=0.5, transform=p)
+    blank_axes(ax2)
+    
+    #------------------------------------------------------------------------------
+    # PLOT: inset connector lines
+    #------------------------------------------------------------------------------
+    
+    mark_inset(ax2, ax, loc1=2, loc2=4, fc="none", ec="0.5")
+    
+    #------------------------------------------------------------------------------
+    # PLOT: title
+    #------------------------------------------------------------------------------
+    
+    left, bottom, width, height = 0.1, 0.95, 0.8, 0.04
+    rect = [left,bottom,width,height]
+    
+    ax6 = plt.axes(rect)
+    ax6.set_facecolor(bg_color)
+    ax6.text(0.5, 0.0, titlestr, ha='center', color='white', fontsize=fontsize)
+    blank_axes(ax6)
+    
+    #------------------------------------------------------------------------------
+    # SAVE: region card
+    #------------------------------------------------------------------------------
+    
+    plt.savefig( figstr, dpi=dpi )    
 
 #------------------------------------------------------------------------------
 print('** END')
+
 
