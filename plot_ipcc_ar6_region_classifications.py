@@ -3,8 +3,8 @@
 #------------------------------------------------------------------------------
 # PROGRAM: plot_ipcc_ar6_region_classifications.py
 #------------------------------------------------------------------------------
-# Version 0.2
-# 13 November, 2023
+# Version 0.3
+# 14 November, 2023
 # Michael Taylor
 # michael DOT a DOT taylor AT uea DOT ac DOT uk 
 #------------------------------------------------------------------------------
@@ -19,19 +19,19 @@ import regionmask
 # Plotting libraries:
 
 import matplotlib
-#matplotlib.use('agg')
+# matplotlib.use('agg')     # for SLURM runs
+# %matplotlib inline        # for Jupyter Notebooks
 import matplotlib.pyplot as plt; plt.close('all')
+import matplotlib.colors as mcolors
 from matplotlib import rcParams
 from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
-# %matplotlib inline # for Jupyter Notebooks
+from mpl_toolkits.axes_grid1.inset_locator import InsetPosition
 
 # Mapping libraries:
 
 import cartopy.crs as ccrs
-
 import cartopy.feature as cfeature
-from mpl_toolkits.axes_grid1.inset_locator import InsetPosition
 from shapely.geometry.polygon import LinearRing
 
 #----------------------------------------------------------------------------
@@ -40,13 +40,12 @@ from shapely.geometry.polygon import LinearRing
 
 extract_classifications = False
 plot_classifications = False
-plot_facetgrid = False
+plot_facetgrid = True
 plot_region = False
-plot_inset = True
+plot_inset = False
 
 fontsize = 16
 dpi = 300
-cmap = 'plasma'
 
 latstep = 0.25
 lonstep = 0.25
@@ -133,7 +132,7 @@ if plot_facetgrid == True:
     #----------------------------------------------------------------------------
     
     xr.set_options(display_style="text", display_expand_data=False, display_width=60)
-    #cmap_mask = mcolors.ListedColormap(["none", "#9ecae1"])
+    cmap_mask = mcolors.ListedColormap(["none", "#9ecae1"])
     region_mask = regionmask.defined_regions.ar6.land.mask_3D(lons, lats)
     
     # PLOT: facetgrid of region masks
@@ -149,8 +148,7 @@ if plot_facetgrid == True:
         transform=ccrs.PlateCarree(),
         add_colorbar=False,
         aspect=1.5,
-        #cmap=cmap_mask,
-        cmap=cmap,
+        cmap=cmap_mask,
     )
     for ax in fg.axes.flatten(): ax.coastlines()
     titles = np.array( [str( region_mask.region.values[i]+1 ) for i in range(len(region_mask.region.values))] )
