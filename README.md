@@ -12,9 +12,8 @@ UEA impact study to generate a global wildfire atlas with FireCrew
 * `convert_netcdf_SN_2_NS.py` - Python script to flip satellite read row order for latitudes from SN --> NS
 * `plot_highest_variance_gridcell_timeseries.py` - Python script to find maximum variance gridcell per variable and plot extracted timeseries and variable mean map + location
 * `plot_ipcc_ar6_region_classifications.py` - Python script to extract IPCC AR6 region masks and plot classification on world map
-* `plot_ipcc_ar6_land_aggregated_timeseries.py` - Python script to aggregrate total variable monthly and yearly sampled timeseries per IPCC AR6 region
 * `plot_ipcc_ar6_land_aggregated_timeseries_stats.py` - Python script to compute gridcell stats for each monthly and yearly sampled variable per IPCC AR6 region
-* `plot_ipcc_ar6_land_aggregated_timeseries_3segment.py` - Python script to aggregrate total variable monthly and yearly sampled timeseries per IPCC AR6 region and then segment the LOESS trend by optimisation of breakpoints
+* `plot_ipcc_ar6_land_aggregated_timeseries_pruning.py` - Python script to aggregrate total variable monthly and yearly sampled timeseries per IPCC AR6 region and then segment the LOESS trend by optimisation of breakpoints
 * `create_ipcc_ar6_region_svg.py` - Python script to proudce a SVG world map for IPCC AR6 land regions
 
 The first step is to clone the latest fire-atlas repo and step into the check out directory: 
@@ -31,9 +30,8 @@ The code was tested locally in a Python 3.8.16 virtual environment.
     $ python hdf5_2_netcdf.py
     $ python merge_netcdfs.py
     $ python convert_netcdf_SN_2_NS.py
-    $ python plot_ipcc_ar6_land_aggregated_timeseries.py (optional)
     $ python plot_ipcc_ar6_land_aggregated_timeseries_stats.py (optional)
-    $ python plot_ipcc_ar6_land_aggregated_timeseries_3segment.py
+    $ python plot_ipcc_ar6_land_aggregated_timeseries_pruning.py
     $ python plot_ipcc_ar6_land_region_svg.py
         
 ## License

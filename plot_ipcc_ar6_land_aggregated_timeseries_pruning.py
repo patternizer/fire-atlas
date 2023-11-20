@@ -3,8 +3,8 @@
 #------------------------------------------------------------------------------
 # PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries.py
 #------------------------------------------------------------------------------
-# Version 0.4
-# 4 November, 2023
+# Version 0.5
+# 20 November, 2023
 # Michael Taylor
 # michael DOT a DOT taylor AT uea DOT ac DOT uk 
 #------------------------------------------------------------------------------
@@ -29,7 +29,9 @@ import seaborn as sns; sns.set()
 
 # Stats libraries:
 
-from statsmodels.tsa.seasonal import STL
+#from statsmodels.tsa.seasonal import STL
+import sklearn
+from sklearn import linear_model
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import TheilSenRegressor
 from sklearn.linear_model import RANSACRegressor
@@ -41,60 +43,6 @@ from lineartree import LinearTreeClassifier, LinearTreeRegressor
 import pwlf
 import random
 import itertools
-
-#----------------------------------------------------------------------------
-# SETTINGS
-#----------------------------------------------------------------------------
-
-fontsize = 16
-dpi = 300
-
-use_log = False
-use_smooth = False
-use_abbrevs = True
-
-plot_facetgrid = False
-
-variable = 'BA_Total'
-#variable = 'BA_Forest_NonForest'
-#variable = 'Cem_Total'
-#variable = 'Cem_Forest_NonForest'
-
-if variable == 'BA_Total':
-    slope_threshold = 0.05
-elif variable == 'BA_Forest_NonForest':
-    slope_threshold = 0.05
-elif variable == 'Cem_Total':
-    slope_threshold = 0.05
-elif variable == 'Cem_Forest_NonForest':
-    slope_threshold = 0.05
-
-nc_file = 'OUT/' + variable + '.nc'
-
-use_yearly = True
-if use_yearly == True:
-    temporalstr = 'yearly'
-
-    nsmooth = 5  # min=6 for LTR
-    #freq = 6     # even for STL
-    use_all_but_last_year = False
-
-else:
-    temporalstr = 'monthly'
-
-    nsmooth = 5
-    #freq = 12
-    use_all_but_last_year = False
-
-# LTR parameters:
-
-depth = 5
-
-# OLS regression parameters:
-    
-#method = 'ols'    
-method = 'theil_sen'    
-#method = 'ransac'    
 
 #----------------------------------------------------------------------------
 # METHODS
@@ -172,11 +120,11 @@ def calculate_piecewise_regression( x, y, depth, nsmooth ):
 
     # COMPUTE: goodness of fit
 
-    mask_ols = np.isfinite(y_obs) & np.isfinite(y_fit.reshape(-1,1))
-    corrcoef = scipy.stats.pearsonr(y_obs[mask_ols], y_fit.reshape(-1,1)[mask_ols])[0]
-    R2adj = adjusted_r_squared(y_obs, y_fit.reshape(-1,1))
+    mask = np.isfinite(y_obs) & np.isfinite(y_fit.reshape(-1,1))
+    corrcoef_fit = scipy.stats.pearsonr(y_obs[mask], y_fit.reshape(-1,1)[mask])[0]
+    R2adj_fit = adjusted_r_squared(y_obs, y_fit.reshape(-1,1))
     
-    return x_fit, y_fit, corrcoef, R2adj
+    return x_fit, y_fit, corrcoef_fit, R2adj_fit
 
 def calculate_slope(x1, y1, x2, y2):
     
@@ -244,6 +192,91 @@ def prune_breakpoints(time_series, breakpoints, slope_threshold):
     return pruned_breakpoints, slopes_pruned_breakpoints, slopes_all
 
 #----------------------------------------------------------------------------
+# SETTINGS
+#----------------------------------------------------------------------------
+
+fontsize = 16
+dpi = 300
+
+use_log = False
+use_abbrevs = True
+use_latitudinal_weighting = False
+plot_facetgrid = True
+
+# LOESS parameters:
+
+loess_frac = 0.6
+
+# LTR parameters:
+
+depth = 5
+nbreaks_max = 2
+slope_threshold = 0.05
+
+# OLS regression parameters:
+    
+#method = 'ols'    
+#method = 'theil_sen'    
+#method = 'ransac'    
+
+variable_list = [ 'BA_Total', 'BA_Forest_NonForest', 'Cem_Total', 'Cem_Forest_NonForest' ]
+timescale_list = [ 'yearly', 'yearly_jj', 'seasonal_mam', 'seasonal_jja', 'seasonal_son', 'seasonal_djf', 'monthly' ]
+
+variable = variable_list[0]
+timescale = timescale_list[0]
+
+#----------------------------------------------------------------------------
+# RUN:
+#----------------------------------------------------------------------------
+
+#for variable in variable_list:   
+#    for timescale in timescale_list:
+
+nc_file = 'OUT/' + variable + '.nc'
+
+if timescale == 'yearly':
+
+	nsmooth = 5
+	use_all_but_last_year = False
+	method = 'theil_sen'    
+	
+elif timescale == 'yearly_jj':
+
+	nsmooth = 5
+	use_all_but_last_year = False
+	method = 'theil_sen'    
+
+elif timescale == 'seasonal_mam':
+
+	nsmooth = 5
+	use_all_but_last_year = False
+	method = 'theil_sen'    
+
+elif timescale == 'seasonal_jja':
+
+	nsmooth = 5
+	use_all_but_last_year = False
+	method = 'theil_sen'    
+
+elif timescale == 'seasonal_son':
+
+	nsmooth = 5
+	use_all_but_last_year = False
+	method = 'theil_sen'    
+
+elif timescale == 'seasonal_djf':
+
+	nsmooth = 5
+	use_all_but_last_year = False
+	method = 'theil_sen'    
+
+elif timescale == 'monthly': 
+
+	nsmooth = 60
+	use_all_but_last_year = False
+	method = 'ols' # Theil-Sen fails to converge for "flat" LOESS in monthly series
+
+#----------------------------------------------------------------------------
 # LOAD: netCDF4
 #----------------------------------------------------------------------------
 
@@ -263,17 +296,70 @@ else:
     
     Z = ds[variable]
 
-if use_yearly == True:
+if timescale == 'yearly':
 
-    Z = Z.resample(time="AS").sum(dim="time")   
+	Z = Z.resample(time="AS").sum(dim="time")   
 
-    if use_all_but_last_year == True:    
-        
-        Z = Z.sel(time=slice(Z.time[0],Z.time[-2]))
+	if use_all_but_last_year == True:    
+		
+		Z = Z.sel(time=slice(Z.time[0],Z.time[-2]))
 
-# SET: zeros to NaN
+elif timescale == 'yearly_jj':
+	
+	Z = Z.resample(time='AS-JUN').sum('time') # anchored offset for the austral year
+
+	'''
+	PANDAS: implementation:
+		
+	# DT.groupby(pd.DatetimeIndex(DT.Date).shift(-3,freq='m').year)    
+	# DT.groupby(DT.index.shift(-3,freq='m').year)
+	'''
+
+elif timescale == 'seasonal_mam':
+
+	month_length = Z.time.dt.days_in_month    
+	weights = (month_length.groupby("time.season") / month_length.groupby("time.season").sum())
+	Z_weighted = (Z * weights)
+	Z = Z_weighted.sel(time=Z_weighted.time.dt.season == 'MAM')
+	Z = Z.groupby(Z.time.dt.year).sum("time")
+	Z = Z.rename({'year':'time'})            
+	Z['time'] = pd.date_range(start=str(Z.time[0].values), end=str(Z.time[-1].values), freq = 'AS')
+
+elif timescale == 'seasonal_jja':
+
+	month_length = Z.time.dt.days_in_month    
+	weights = (month_length.groupby("time.season") / month_length.groupby("time.season").sum())
+	Z_weighted = (Z * weights)
+	Z = Z_weighted.sel(time=Z_weighted.time.dt.season == 'JJA')
+	Z = Z.groupby(Z.time.dt.year).sum("time")
+	Z = Z.rename({'year':'time'})            
+	Z['time'] = pd.date_range(start=str(Z.time[0].values), end=str(Z.time[-1].values), freq = 'AS')
+
+elif timescale == 'seasonal_son':
+
+	month_length = Z.time.dt.days_in_month    
+	weights = (month_length.groupby("time.season") / month_length.groupby("time.season").sum())
+	Z_weighted = (Z * weights)
+	Z = Z_weighted.sel(time=Z_weighted.time.dt.season == 'SON')
+	Z = Z.groupby(Z.time.dt.year).sum("time")
+	Z = Z.rename({'year':'time'})            
+	Z['time'] = pd.date_range(start=str(Z.time[0].values), end=str(Z.time[-1].values), freq = 'AS')
+
+elif timescale == 'seasonal_djf':
+
+	month_length = Z.time.dt.days_in_month    
+	weights = (month_length.groupby("time.season") / month_length.groupby("time.season").sum())
+	Z_weighted = (Z * weights)
+	Z = Z_weighted.sel(time=Z_weighted.time.dt.season == 'DJF')
+	Z = Z.groupby(Z.time.dt.year).sum("time")
+	Z = Z.rename({'year':'time'})            
+	Z['time'] = pd.date_range(start=str(Z.time[0].values), end=str(Z.time[-1].values), freq = 'AS')
+		
+# SET: zeros to NaN (impacts means if calculated)
 
 #Z = Z.where(Z > 0.0)
+
+# LOAD: regional mask
 
 mask_3D = regionmask.defined_regions.ar6.land.mask_3D( Z )
 n_regions = mask_3D.region.shape[0]
@@ -281,31 +367,30 @@ n_regions = mask_3D.region.shape[0]
 #region_i = mask_3D.sel(region=3)
 #Z_i = Z.where(region_i)
 
-#weights = np.cos(np.deg2rad(Z.lat))
-#Z_regional_weighted_sum = Z.weighted(mask_3D * weights).sum(dim=("lat", "lon"))
-Z_regional_weighted_sum = Z.weighted(mask_3D).sum(dim=("lat", "lon"))
+# APPLY: latitudinal weights
+
+if use_latitudinal_weighting == True:
+
+	weights = np.cos(np.deg2rad(Z.lat))
+	Z_regional_weighted_sum = Z.weighted(mask_3D * weights).sum(dim=("lat", "lon"))
+
+else:
+	
+	Z_regional_weighted_sum = Z.weighted(mask_3D).sum(dim=("lat", "lon"))
 
 #----------------------------------------------------------------------------
-# PLOT: facetgrid of regionally-averaged timeseries gridcell stats
+# PLOT: facetgrid of regional timeseries
 #----------------------------------------------------------------------------
 
 if plot_facetgrid == True:
     
-    figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + temporalstr + '.png'
+    figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + timescale + '.png'
     titlestr = variable + ': aggregated sum across each IPCC AR6 land region (1-46)'
-    
+
     fig, axs = plt.subplots(ncols=8, nrows=6, figsize=(13.33,7.5), sharex=True, sharey=True, gridspec_kw={'hspace': 0.3, 'wspace': 0.1})
     axs = axs.ravel()
-    for i in range(n_regions):
-        
-        if use_smooth == True:
-                    
-            axs[i].plot( Z.time.values, pd.Series( Z_regional_weighted_mean.isel(region=i).values ).rolling(nsmooth, center=True, win_type='gaussian').mean(std=3), color='black', lw=1, alpha = 1, label='Mean' )
-    
-        else:
-    
-            axs[i].plot( Z.time.values, Z_regional_weighted_sum.isel(region=i).values, color='black', lw=1, alpha = 1 )
-    
+    for i in range(n_regions):        
+        axs[i].plot( Z.time.values, Z_regional_weighted_sum.isel(region=i).values, color='black', lw=1, alpha = 1 )    
         axs[i].tick_params(labelsize=4, colors='k')    
     axs[46].axis('off')
     axs[47].axis('off')
@@ -313,25 +398,26 @@ if plot_facetgrid == True:
     if use_abbrevs == True:
     
         titles = mask_3D.abbrevs.values
-    
+
     else:
-    
+
         titles = np.array( [str( mask_3D.region.values[i]+1 ) for i in range(len(mask_3D.region.values))] )
-        
+
     for axs, title in zip(axs.flatten(),titles): axs.set_title(title, fontsize=8)
     fig.autofmt_xdate()
     plt.savefig(figstr, dpi=dpi, bbox_inches='tight')
     plt.close()
 
 #----------------------------------------------------------------------------
-# PLOT: regionally-averaged timeseries gridcell statistics per region
+# LOOP: over regions
 #----------------------------------------------------------------------------
 
 for i in range(n_regions):
     
     print('Region=', i)
-    # SMOOTH: with a Gaussian filter (windowed)
-    
+
+    # SMOOTH: with a Gaussian filter (windowed) - to stabilise LOESS fit
+
     t = Z.time.values
     ts = Z_regional_weighted_sum.isel(region=i).values    
     ts_before_mean = np.nanmean( ts[0:int(nsmooth/2)] )
@@ -340,8 +426,8 @@ for i in range(n_regions):
     ts_smoothed = pd.Series( ts_windowed ).rolling( nsmooth, center=True, win_type='gaussian').mean(std=3).values[int(nsmooth/2):-int(nsmooth/2):]
 
     # LOESS fit to smooth
-        
-    y_loess = sm.nonparametric.lowess( exog=t, endog=ts_smoothed, frac=0.6 )[:,1]
+
+    y_loess = sm.nonparametric.lowess( exog=t, endog=ts_smoothed, frac=loess_frac )[:,1]
 
     # STL fit --> trend
         
@@ -361,7 +447,6 @@ for i in range(n_regions):
     idx_all = df_delta_abs[df_delta_abs['delta_abs'] > 0].index.to_list()   
     
     '''
-
     if use_yearly == False:
     
         if len(idx_all) > 0:
@@ -371,9 +456,9 @@ for i in range(n_regions):
                 if idx_all_diff[ k ] > 1:
                     idx_all_pruned.append( idx_all[k] )     
             idx_all = idx_all_pruned
+    '''
         
     if len(idx_all) > 1:       
-        #idx_breaks, slopes_breaks, slopes_all = prune_breakpoints( df_delta_abs['delta_abs'].values, idx_all, slope_threshold) # change in slope = 1e6
         idx_breaks, slopes_breaks, slopes_all = prune_breakpoints( y_fit, idx_all, slope_threshold)
     else:
         idx_breaks = idx_all
@@ -382,8 +467,6 @@ for i in range(n_regions):
 
     idx_pruned = np.setdiff1d( idx_all, idx_breaks )
     idx = [idx_all.index(item) for item in idx_pruned]
-
-    '''
     
     idx_breaks = idx_all
        
@@ -405,87 +488,113 @@ for i in range(n_regions):
             random_breakpoints = np.sort( combo ) 
 
             # FIT: to LOESS
-    
+
             random_ts = []
             for k in range(len(random_breakpoints)):
+
                 if k == 0:
+
                     t_segment = t[0:random_breakpoints[k]]
                     ts_segment = y_fit[0:random_breakpoints[k]]
                     t_segment_ols, ts_segment_ols, slope_segment_ols, intercept_ols = linear_regression_ols( t_segment, ts_segment, method )
                     random_ts.append(ts_segment_ols)
+
                 else: 
+
                     t_segment = t[random_breakpoints[k-1]:random_breakpoints[k]]
                     ts_segment = y_fit[random_breakpoints[k-1]:random_breakpoints[k]]                
                     t_segment_ols, ts_segment_ols, slope_segment_ols, intercept_ols = linear_regression_ols( t_segment, ts_segment, method )
                     random_ts.append(ts_segment_ols)
-    
+
             t_segment = t[random_breakpoints[k]:]
             ts_segment = y_loess[random_breakpoints[k]:]
             t_segment_ols, ts_segment_ols, slope_segment_ols, intercept_ols = linear_regression_ols( t_segment, ts_segment, method )
             random_ts.append(ts_segment_ols)
 
             # JOIN: segments
-            
+
             random_ts = np.hstack( random_ts )
-            
+
             # COMPUTE: correlation of segmented fit on LOESS
-            
+
             correlation = np.corrcoef( random_ts, y_loess)[0, 1]
             correlations.append( correlation )
-        
+
         # EXTRACT: best combination
-        
-        best_combo = combinations[ np.argmax( correlations ) ]
-        
+
+        best_combo = combinations[ np.argmax( correlations ) ]        
         idx_breaks = list( best_combo )
-        
 
+    #----------------------------------------------------------------------------
+    # PLOT: regional timeseries with LOESS, OLS and 3-segement trend lines
+    #----------------------------------------------------------------------------
 
-
-    
-    figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + temporalstr + '-' + 'region' + '-' + str(i+1).zfill(2) + '.png'
-    if use_yearly == True:
+    figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.png'
+    if timescale == 'yearly':
         titlestr = variable + ': aggregated yearly total over IPCC AR6 land region ' + str(i+1)
+    elif timescale == 'yearly_jj':
+        titlestr = variable + ': aggregated yearly (July-June) total over IPCC AR6 land region ' + str(i+1)
+    elif timescale == 'seasonal_mam':
+        titlestr = variable + ': aggregated seasonal (MAM) total over IPCC AR6 land region ' + str(i+1)
+    elif timescale == 'seasonal_jja':
+        titlestr = variable + ': aggregated seasonal (JJA) total over IPCC AR6 land region ' + str(i+1)
+    elif timescale == 'seasonal_son':
+        titlestr = variable + ': aggregated seasonal (SON) total over IPCC AR6 land region ' + str(i+1)
+    elif timescale == 'seasonal_djf':
+        titlestr = variable + ': aggregated seasonal (DJF) total over IPCC AR6 land region ' + str(i+1)
     else:
         titlestr = variable + ': aggregated monthly total over IPCC AR6 land region ' + str(i+1)
+
     if (variable == 'BA_Total') | (variable == 'Cem_Total'):
         ylabelstr = 'Total'
     else:
         ylabelstr = 'TC30_F'
-    
+
     fig, ax = plt.subplots(figsize=(13.33,7.5))
+    plt.plot( t, Z_regional_weighted_sum.isel(region=i).values, color='black', lw=3, alpha = 1, label='Sum' )        
 
-    if use_smooth == True:
-                
-        plt.plot( t, pd.Series( Z_regional_weighted_sum.isel(region=i).values ).rolling(nsmooth, center=True, win_type='gaussian').mean(std=3), color='red', lw=3, alpha = 1, label='Sum' )
+    #plt.plot( t, trend + seasonal + residual, color='red', lw=1, alpha = 1, label='Trend + Seasonal + Residual' )
+    #plt.plot( t, trend + seasonal, color='green', lw=1, alpha = 1, label='Trend + Seasonal' )
+    #plt.plot( t, trend, color='blue', lw=2, alpha = 1, label='Trend' )
+    #plt.plot( t, pd.Series( Z_regional_weighted_sum.isel(region=i).values ).rolling(nsmooth, center=True, win_type='gaussian').mean(std=3), color='red', lw=3, alpha = 1, label='Sum' )
 
-    else:
-
-        #plt.plot( t, trend + seasonal + residual, color='red', lw=1, alpha = 1, label='Trend + Seasonal + Residual' )
-        #plt.plot( t, trend + seasonal, color='green', lw=1, alpha = 1, label='Trend + Seasonal' )
-        #plt.plot( t, trend, color='blue', lw=2, alpha = 1, label='Trend' )
-
-        plt.plot( t, Z_regional_weighted_sum.isel(region=i).values, color='black', lw=3, alpha = 1, label='Sum' )        
+    if timescale == 'yearly':
         plt.plot( t, y_ols, color='red', lw=2, alpha = 1, label='Theil-Sen' )
         plt.plot( t, y_loess, color='blue', lw=3, alpha = 1, label='LOESS' )        
+    elif timescale == 'yearly_jj':
+        plt.plot( t, y_ols, color='red', lw=2, alpha = 1, label='Theil-Sen' )
+        plt.plot( t, y_loess, color='blue', lw=3, alpha = 1, label='LOESS' )        
+    elif timescale == 'seasonal_mam':
+        plt.plot( t, y_ols, color='red', lw=2, alpha = 1, label='Theil-Sen' )
+        plt.plot( t, y_loess, color='blue', lw=3, alpha = 1, label='LOESS' )        
+    elif timescale == 'seasonal_jja':
+        plt.plot( t, y_ols, color='red', lw=2, alpha = 1, label='Theil-Sen' )
+        plt.plot( t, y_loess, color='blue', lw=3, alpha = 1, label='LOESS' )        
+    elif timescale == 'seasonal_son':
+        plt.plot( t, y_ols, color='red', lw=2, alpha = 1, label='Theil-Sen' )
+        plt.plot( t, y_loess, color='blue', lw=3, alpha = 1, label='LOESS' )        
+    elif timescale == 'seasonal_djf':
+        plt.plot( t, y_ols, color='red', lw=2, alpha = 1, label='Theil-Sen' )
+        plt.plot( t, y_loess, color='blue', lw=3, alpha = 1, label='LOESS' )     
+        
+    if timescale != 'monthly':
+        
+        if len(idx_pruned) > 0:
+            for b in range(len(idx)): 
+                if b == 0:
+                    plt.axvline( x=t[ idx_all[ idx[b] ] ], lw=1, ls='--', color='red', label='pruned')
+                else:
+                    plt.axvline( x=t[ idx_all[ idx[b] ] ], lw=1, ls='--', color='red')
+            for b in range(len(idx)): plt.text( t[ idx_all[ idx[b] ] ], y_fit[ idx_all[ idx[b] ] ], str( np.round( slopes_all[ idx[b] ], 3 ) ), color='red' )
+        if len(idx_breaks) > 0:
+            for b in range(len(idx_breaks)): 
+                if b == 0:
+                    plt.axvline(x=t[idx_breaks[b]], lw=1, ls='--', color='black', label='breakpoint')
+                else:
+                    plt.axvline(x=t[idx_breaks[b]], lw=1, ls='--', color='black')
+            for b in range(len(idx_breaks)): plt.text( t[idx_breaks[b]], y_fit[idx_breaks[b]], str( np.round( slopes_breaks[b], 3 ) ), color='black' )
         plt.plot( t, y_fit, color='yellow', lw=2, alpha = 1, label='LTR segments (n=' + str(len(idx_breaks)+1) + ')' )
-        
-        if use_yearly == True:
-        
-            if len(idx_pruned) > 0:
-                for b in range(len(idx)): 
-                    if b == 0:
-                        plt.axvline( x=t[ idx_all[ idx[b] ] ], lw=1, ls='--', color='red', label='pruned')
-                    else:
-                        plt.axvline( x=t[ idx_all[ idx[b] ] ], lw=1, ls='--', color='red')
-                for b in range(len(idx)): plt.text( t[ idx_all[ idx[b] ] ], y_fit[ idx_all[ idx[b] ] ], str( np.round( slopes_all[ idx[b] ], 3 ) ), color='red' )
-            if len(idx_breaks) > 0:
-                for b in range(len(idx_breaks)): 
-                    if b == 0:
-                        plt.axvline(x=t[idx_breaks[b]], lw=1, ls='--', color='black', label='breakpoint')
-                    else:
-                        plt.axvline(x=t[idx_breaks[b]], lw=1, ls='--', color='black')
-                for b in range(len(idx_breaks)): plt.text( t[idx_breaks[b]], y_fit[idx_breaks[b]], str( np.round( slopes_breaks[b], 3 ) ), color='black' )
+
                 
         # PLOT: OLS segments from LTR (check)
             
@@ -503,19 +612,19 @@ for i in range(n_regions):
             segment_range = np.arange( idx_breaks[b]-1, len(t) )                    
             plt.plot( t[segment_range], y_fit[segment_range], lw=2, color='purple', label='LTR segments (n=' + str(len(idx_breaks)+1) + ')' )        
         '''
-                
+
     plt.legend(loc='upper left', fontsize=fontsize)
     plt.tick_params(labelsize=fontsize, colors='k')    
     plt.ylabel( ylabelstr, fontsize=fontsize)
 
     if use_abbrevs == True:
-    
+
         titlestr = titlestr + ' (' + mask_3D.abbrevs.values[i] + ')'
-    
+
     else:
-    
+
         titlestr = titlestr + ' (' + str( mask_3D.region.values[i]+1 ) + ')'
-        
+
     plt.title(titlestr, fontsize=fontsize)
     plt.savefig(figstr, dpi=dpi, bbox_inches='tight')
     plt.close()
