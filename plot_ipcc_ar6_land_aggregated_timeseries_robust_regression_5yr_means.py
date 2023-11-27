@@ -3,8 +3,8 @@
 #------------------------------------------------------------------------------
 # PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries_robust_regression_5yr_means.py
 #------------------------------------------------------------------------------
-# Version 0.6
-# 20 November, 2023
+# Version 0.8
+# 27 November, 2023
 # Michael Taylor
 # michael DOT a DOT taylor AT uea DOT ac DOT uk 
 #------------------------------------------------------------------------------
@@ -28,9 +28,18 @@ import matplotlib.cbook as cbook
 import matplotlib.dates as mdates
 # %matplotlib inline # for Jupyter Notebooks
 #import seaborn as sns; sns.set()
+from matplotlib.lines import Line2D
+from matplotlib import patches
+import matplotlib.image as image
 
-mpl.rcParams.update({"axes.grid" : True, "grid.color": "lightgrey"})
+import seaborn as sns
 
+#mpl.style.use('ggplot')
+#mpl.rcParams.update({"axes.grid" : True, "grid.color": "lightgrey"})
+plt.rcParams["font.family"] = "arial"
+grey80 = '#808080'
+grey90 = '#e5e5e5'
+                   
 # Stats libraries:
 
 import sklearn
@@ -50,6 +59,16 @@ import pwlf
 import random
 import itertools
 
+# Silence library version notifications
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+
+#----------------------------------------------------------------------------
+ 
 #----------------------------------------------------------------------------
 # METHODS
 #----------------------------------------------------------------------------
@@ -127,7 +146,7 @@ def fit_linear_regression( x, y, method, ci ):
 fontsize = 16
 dpi = 300
 
-use_abbrevs = True
+use_abbrevs = False
 use_latitudinal_weighting = False
 
 # LOESS parameters:
@@ -144,7 +163,7 @@ alpha = np.round( 1.0 - ( ci / 100.0 ), 3 )
 variable_list = [ 'BA_Total', 'BA_Forest_NonForest', 'Cem_Total', 'Cem_Forest_NonForest' ]
 timescale_list = [ 'yearly', 'yearly_jj', 'seasonal_mam', 'seasonal_jja', 'seasonal_son', 'seasonal_djf', 'monthly' ]
 
-variable = variable_list[3]
+variable = variable_list[0]
 timescale = timescale_list[0]
 
 #----------------------------------------------------------------------------
@@ -157,31 +176,31 @@ timescale = timescale_list[0]
 nc_file = 'OUT/' + variable + '.nc'
 
 if variable == 'BA_Total':
-    variablestr = r'Burned Area'
-    unitstr = r'[(1000) $km^{2}$]'
+    variablestr = 'Burned Area'
+    unitstr = '(thousand km' + r'$^{2}$' + ')'
 elif variable == 'BA_Forest_NonForest':
-    variablestr = r'Burned Area (30% Forest)'
-    unitstr = r'[(1000) $km^{2}$]'
+    variablestr = 'Burned Area (in forest)'
+    unitstr = '(thousand km' + r'$^{2}$' + ')'
 elif variable == 'Cem_Total':
-    variablestr = r'Carbon Emissions'
-    unitstr = r'[$TgC$]'
+    variablestr = 'Carbon Emissions'
+    unitstr = '(thousand tonnes C)'
 elif variable == 'Cem_Forest_NonForest':
-    variablestr = r'Carbon Emissions (30% Forest)'
-    unitstr = r'[$TgC$]'
+    variablestr = 'Carbon Emissions (in forest)'
+    unitstr = '(thousand tonnes C)'
 
 if timescale == 'yearly':
 
 	nsmooth = 5
 	use_all_but_last_year = False
 	method = 'theil_sen'
-	timescalestr = 'Yearly (JAN-DEC)'
+	timescalestr = 'Annual (JAN-DEC)'
 	
 elif timescale == 'yearly_jj':
 
 	nsmooth = 5
 	use_all_but_last_year = False
 	method = 'theil_sen'
-	timescalestr = 'Yearly (JUL-JUN)'
+	timescalestr = 'Annual (JUL-JUN)'
 
 elif timescale == 'seasonal_mam':
 
@@ -218,6 +237,9 @@ elif timescale == 'monthly':
 	method = 'ols' # Theil-Sen fails to converge for "flat" LOESS in monthly series
 	timescalestr = 'Monthly'
 
+titlestr_ = timescalestr.title() + ' ' + variablestr.lower()
+ylabelstr = variablestr[:1] + variablestr.lower()[1:] + ' ' + unitstr
+
 #----------------------------------------------------------------------------
 # LOAD: netCDF4
 #----------------------------------------------------------------------------
@@ -238,17 +260,6 @@ elif (variable == 'Cem_Total') | (variable == 'Cem_Forest_NonForest'):
     
     Z = Z / 1.0e9
 
-# IDENTIFY: incomplete years
-
-t = Z.time.values
-years = np.array( [ pd.Series(t)[i].year for i in range(len(t)) ] )
-year_mask = []
-for year in np.unique(years):
-    if len( years[years == year] ) == 12:
-        year_mask.append( True )
-    else:
-        year_mask.append( False )
-
 if timescale == 'yearly':
 
 	Z = Z.resample(time="AS").sum(dim="time")   
@@ -258,8 +269,8 @@ if timescale == 'yearly':
 		Z = Z.sel(time=slice(Z.time[0],Z.time[-2]))
 
 elif timescale == 'yearly_jj':
-	
-	Z = Z.resample(time='AS-JUN').sum('time') # anchored offset for the austral year
+
+	Z = Z.resample(time='AS-JUL').sum('time') # anchored offset for the austral year
 
 	'''
 	PANDAS: implementation:
@@ -333,6 +344,38 @@ else:
 #----------------------------------------------------------------------------
 
 for i in range(n_regions):
+    
+    print('Region=', i)
+
+    # EXTRACT: regional timeseries    
+
+    t = Z.time.values
+    ts = Z_regional_sum.isel(region=i).values    
+
+    ''' 
+    # APPLY: year mask
+
+    if timescale == 'yearly':
+
+        # YEAR MASK: incomplete years
+                
+        t = Z.time.values
+        years = np.array( [ pd.Series(t)[i].year for i in range(len(t)) ] )
+        year_mask = []
+        for year in np.unique(years):
+            if len( years[years == year] ) == 12:
+                year_mask.append( True )
+            else:
+                year_mask.append( False )
+        
+        t = t[ year_mask ]
+        ts = ts[ year_mask ]
+    '''
+        
+    tstart_ols = t[0]
+    tend_ols = t[-1]
+
+    # INITIALISE: stat vectors
 
     fittypes = []
     slopes = []
@@ -341,21 +384,6 @@ for i in range(n_regions):
     R2adjs = []
     tstarts = []
     tends = []
-
-    print('Region=', i)
-
-    # SMOOTH: with a Gaussian filter (windowed) - to stabilise LOESS fit
-
-    t = Z.time.values
-    ts = Z_regional_sum.isel(region=i).values    
-
-    # APPLY: year mask
-
-    t = t[ year_mask ]
-    ts = ts[ year_mask ]
-
-    tstart_ols = t[0]
-    tend_ols = t[-1]
 
     if np.subtract( ts, np.zeros(len(ts)) ).sum() == 0:
         
@@ -369,6 +397,8 @@ for i in range(n_regions):
     else:
 
         no_data = False
+
+        # SMOOTH: with a Gaussian filter (windowed) - to stabilise LOESS fit
         
         ts_before_mean = np.nanmean( ts[0:int(nsmooth/2)] )
         ts_after_mean = np.nanmean( ts[-int(nsmooth/2)-1:] )
@@ -411,15 +441,72 @@ for i in range(n_regions):
     #y = ts.isel(region=i).values
     y = ts
     s = pd.Series( y, index = t )    
-    df_intervals = pd.DataFrame([
-        ['2000-01-01', '2004-12-31'],
-        ['2005-01-01', '2009-12-31'],
-        ['2010-01-01', '2014-12-31'],
-        ['2015-01-01', '2019-12-31'],
-        ['2020-01-01', '2024-12-31'],        
-    ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
-    df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+    if timescale == 'yearly':
         
+        df_intervals = pd.DataFrame([
+            ['2000-01-01', '2004-12-31'],
+            ['2005-01-01', '2009-12-31'],
+            ['2010-01-01', '2014-12-31'],
+            ['2015-01-01', '2019-12-31'],
+            ['2020-01-01', '2024-12-31'],        
+        ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+        df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+
+    elif timescale == 'yearly_jj':
+
+        df_intervals = pd.DataFrame([
+            ['2000-07-01', '2005-06-30'],
+            ['2005-07-01', '2010-06-30'],
+            ['2010-07-01', '2015-06-30'],
+            ['2015-07-01', '2020-06-30'],
+            ['2020-07-01', '2025-06-30'],        
+        ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+        df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+
+    elif timescale == 'seasonal_djf':
+
+        df_intervals = pd.DataFrame([
+            ['2000-01-01', '2004-12-31'],
+            ['2005-01-01', '2009-12-31'],
+            ['2010-01-01', '2014-12-31'],
+            ['2015-01-01', '2019-12-31'],
+            ['2020-01-01', '2024-12-31'],        
+        ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+        df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+
+    elif timescale == 'seasonal_mam':
+
+        df_intervals = pd.DataFrame([
+            ['2000-01-01', '2004-12-31'],
+            ['2005-01-01', '2009-12-31'],
+            ['2010-01-01', '2014-12-31'],
+            ['2015-01-01', '2019-12-31'],
+            ['2020-01-01', '2024-12-31'],        
+        ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+        df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+
+    elif timescale == 'seasonal_jja':
+
+        df_intervals = pd.DataFrame([
+            ['2000-01-01', '2004-12-31'],
+            ['2005-01-01', '2009-12-31'],
+            ['2010-01-01', '2014-12-31'],
+            ['2015-01-01', '2019-12-31'],
+            ['2020-01-01', '2024-12-31'],        
+        ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+        df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+
+    elif timescale == 'seasonal_son':
+
+        df_intervals = pd.DataFrame([
+            ['2000-01-01', '2004-12-31'],
+            ['2005-01-01', '2009-12-31'],
+            ['2010-01-01', '2014-12-31'],
+            ['2015-01-01', '2019-12-31'],
+            ['2020-01-01', '2024-12-31'],        
+        ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+        df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
+       
     #----------------------------------------------------------------------------
     # SAVE: regional timeseries to CSV
     #----------------------------------------------------------------------------
@@ -433,7 +520,7 @@ for i in range(n_regions):
         df_timeseries['variable'] = [variable] * len(years)
         df_timeseries['timescale'] = [timescale] * len(years)
         df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
-        df_timeseries.to_csv( variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+        df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
 		
     else:
 
@@ -456,7 +543,7 @@ for i in range(n_regions):
         df_timeseries['variable'] = [variable] * len(years)
         df_timeseries['timescale'] = [timescale] * len(years)
         df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
-        df_timeseries.to_csv( variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+        df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
 		
     #----------------------------------------------------------------------------
     # SAVE: regional trend stats to CSV
@@ -474,15 +561,13 @@ for i in range(n_regions):
     df_stats['timescale'] = [timescale] * len(fittypes)
     df_stats['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(fittypes)
     df_stats = df_stats.round(decimals=6)    
-    df_stats.to_csv( variable + '-' + 'stats' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+    df_stats.to_csv( 'RUN/' + variable + '-' + 'stats' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
 
     #----------------------------------------------------------------------------
     # PLOT: regional timeseries with LOESS, OLS and 3-segement trend lines
     #----------------------------------------------------------------------------
 
     figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.png'
-    titlestr = timescalestr + ' ' + variablestr + ': ' + 'IPCC AR6 land region ' + str(i+1)
-    ylabelstr = variablestr + ' ' + unitstr
 
     fig, ax = plt.subplots(figsize=(13.33,7.5))
 
@@ -505,12 +590,13 @@ for i in range(n_regions):
     
             # PLOT: 5-yr interval means
             
+            tdelta = int(365/2)                    
             for k in range(len(df_intervals)):
                 
                 if (k < len(df_intervals) - 1):
-                    t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - np.timedelta64(int(365/2),'D')
+                    t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - np.timedelta64( tdelta, 'D')
                 else: 
-                    t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - np.timedelta64(int(365/2),'D')
+                    t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - np.timedelta64( tdelta, 'D')
                     if len(t_interval) > 1:
                         t_interval[-1] = t_interval[-1] + np.timedelta64(365,'D')
                     else:
@@ -518,7 +604,8 @@ for i in range(n_regions):
             
                 y_interval = [ df_intervals['5yr-mean'][k] ] * len( t_interval )
                 if k == 0:
-                    plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='5-yr mean', zorder=4 )
+                    #plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='5-yr mean', zorder=4 )
+                    plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='Half-decade average', zorder=4 )
                 else:
                     plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, zorder=4 )
         
@@ -530,33 +617,66 @@ for i in range(n_regions):
                 pvaluestr = 'p=' + str( np.round( pvalues_ols[1], 3 ) )
         
             if pvalues_ols[1] <= alpha:
-                plt.plot(t, y_ols, color='red', lw=3, label='Theil-Sen (' + r'$\beta_{0}=$' + str( (np.round( params_ols[0], 1)) ) + ', ' + r'$\beta_{1}$=' + str( (np.round( params_ols[1], 1 )) ) + r' $yr^{-1}$)', zorder=5)                            
-                plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='Theil-Sen 95% c.i. (' + pvaluestr  + ', ' + hypothesis_teststr + ')', zorder=1)
-    
-            plt.legend(loc='best', ncol=2, fontsize=10)
-    
+                #plt.plot(t, y_ols, color='red', lw=3, label='Theil-Sen (' + r'$\beta_{0}=$' + str( (np.round( params_ols[0], 1)) ) + ', ' + r'$\beta_{1}$=' + str( (np.round( params_ols[1], 1 )) ) + r' $yr^{-1}$)', zorder=5)                            
+                #plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='Theil-Sen 95% c.i. (' + pvaluestr  + ', ' + hypothesis_teststr + ')', zorder=1)
+                plt.plot(t, y_ols, color='red', lw=3, label='Trend (p < 0.05)', zorder=5)                            
+                plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='95% confidence level', zorder=1)
+
+            legend_elements = [
+                Line2D( [0], [0], marker='o', markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1, label=variablestr),
+                Line2D( [0], [1], solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='Half-decade average'),
+                Line2D( [1], [0], color='red', lw=3, label='Trend (p < 0.05)'),
+                patches.Patch( [1], [1], color='red', alpha=0.1, label='95% confidence level')                                
+            ]    
+            plt.legend( handles = legend_elements, ncol=2, labelcolor = grey80, fontsize = fontsize, loc='center', bbox_to_anchor=(0.7, -0.2), fancybox = False, shadow = False, frameon=True )
+                
         else:
             
             # PLOT: monthly timeseries
     
             plt.plot( t, y, 'o', markersize=3, markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1)                
-
+            
     fig.autofmt_xdate(rotation=0, ha='center')
-    ax.fmt_xdata = mdates.DateFormatter('%Y')
+    
+    ax.xaxis.set_major_formatter( mdates.DateFormatter('%Y') )
+    #ax.fmt_xdata = mdates.DateFormatter('%Y')
     ax.xaxis.set_major_locator(mdates.YearLocator(5))
-    ax.xaxis.set_minor_locator(mdates.YearLocator(1))
-    ax.grid(True)
+    #ax.xaxis.set_minor_locator(mdates.YearLocator(1))
+    #ax.grid( True )
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    #ax.spines['bottom'].set_visible(False)
+    #ax.spines['left'].set_visible(False)
+    ax.get_xaxis().set_tick_params(direction='out', width=1)
+    ax.get_yaxis().set_tick_params(direction='out', width=1)
     ax = plt.gca()
-    ax.grid(which='minor', axis='both', linestyle='-', color='lightgrey', alpha=0.1)
-    ax.grid(which='major', axis='both', linestyle='-', color='grey', alpha=0.1)    
-    plt.tick_params(labelsize=fontsize, colors='k')    
-    plt.ylabel( ylabelstr, fontsize=fontsize)
+    #ax.grid( which='minor', axis='y', linestyle='-', color=grey80, alpha=1 )
+    ax.grid( which='major', axis='y', linestyle='-', color=grey90, alpha=1 )    
+    plt.xlim( [np.datetime64('2000'), np.datetime64('2025')] )
+    #plt.ylim( [np.min(y), np.max(y)] )
+    plt.tick_params( colors=grey80, labelsize=fontsize )    
+
+    sns.despine( offset=10, trim=True)
+
+    plt.ylabel( ylabelstr, color=grey80, fontsize=fontsize )
     if use_abbrevs == True:
-        titlestr = titlestr + ' (' + mask_3D.abbrevs.values[i] + ')'
+        titlestr = titlestr_ + ' (' + mask_3D.abbrevs.values[i] + ')'
     else:
-        titlestr = titlestr + ' (' + str( mask_3D.region.values[i]+1 ) + ')'
-    plt.title(titlestr, fontsize=fontsize)
-    plt.savefig(figstr, dpi=dpi, bbox_inches='tight')
+        titlestr = titlestr_ + ' (' + mask_3D.region.names.values[i] + ')'
+    plt.title( titlestr, color=grey80, fontsize=fontsize )    
+
+    # CREDITS:    
+
+    plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(280,80), xycoords='figure pixels', color = grey90, fontsize = fontsize )   
+
+    # LOGO:    
+        
+    im = image.imread('logo-cru.png')
+    imax = fig.add_axes([0.36, 0.06, 0.05, 0.05])
+    imax.set_axis_off()
+    imax.imshow(im, aspect="equal")
+
+    plt.savefig( figstr, dpi=dpi, bbox_inches='tight' )
     plt.close()
 
 #----------------------------------------------------------------------------

@@ -39,8 +39,8 @@ from shapely.geometry.polygon import LinearRing
 #----------------------------------------------------------------------------
 
 extract_classifications = False
-plot_classifications = False
-plot_facetgrid = True
+plot_classifications = True
+plot_facetgrid = False
 plot_region = False
 plot_inset = False
 
@@ -113,17 +113,19 @@ if plot_classifications == True:
     # PLOT: region classifications
     #----------------------------------------------------------------------------
     
-    text_kws = dict(color="#67000d", fontsize=7, bbox=dict(pad=0.2, color="w"))
+    #text_kws = dict(color="#67000d", fontsize=7, bbox=dict(pad=0.2, color="w"))
+    text_kws = dict(color='black', fontsize=7, bbox=dict(pad=0.2, color="w"))
     
-    plot_regions( 'giorgi', "text_kws=text_kws, add_ocean=True, label_multipolygon='all'", p)
-    plot_regions( 'srex', "text_kws=text_kws, add_ocean=True, label_multipolygon='all'", p)
+    #plot_regions( 'giorgi', "text_kws=text_kws, add_ocean=True, label_multipolygon='all'", p)
+    #plot_regions( 'srex', "text_kws=text_kws, add_ocean=True, label_multipolygon='all'", p)
     #plot_regions( 'ar6.land', "text_kws=text_kws, add_ocean=True, label_multipolygon='all'", p)
     #plot_regions( 'ar6.land', "text_kws=text_kws, add_ocean=True, add_land=True, add_label=False", p)
-    plot_regions( 'ar6.land', "text_kws=text_kws, add_ocean=True, add_land=True, label='abbrev'", p)
-    plot_regions( 'ar6.ocean', "text_kws=text_kws, add_land=True, label_multipolygon='all'", p)
+    #plot_regions( 'ar6.land', "text_kws=text_kws, add_ocean=True, add_land=True, label='abbrev'", p)
+    #plot_regions( 'ar6.ocean', "text_kws=text_kws, add_land=True, label_multipolygon='all'", p)
     #plot_regions( 'ar6.all', "text_kws=text_kws, label_multipolygon='all'", p)
-    plot_regions( 'ar6.all', "text_kws=text_kws, add_land=True, add_ocean=True, add_label=False", p)
-    plot_regions( 'natural_earth_v5_0_0.countries_110', "text_kws=text_kws, add_ocean=True, add_label=True", p)
+    #plot_regions( 'ar6.all', "text_kws=text_kws, add_land=True, add_ocean=True, add_label=False", p)
+    plot_regions( 'ar6.all', "text_kws=text_kws, add_land=True, add_ocean=True, label='abbrev'", p)
+    #plot_regions( 'natural_earth_v5_0_0.countries_110', "text_kws=text_kws, add_ocean=True, add_label=True", p)
 
 if plot_facetgrid == True:
     
