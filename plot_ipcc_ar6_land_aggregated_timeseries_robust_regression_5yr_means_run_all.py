@@ -1,7 +1,7 @@
 #! /usr/bin python
 
 #------------------------------------------------------------------------------
-# PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries_robust_regression_5yr_means.py
+# PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries_robust_regression_5yr_means_run_all.py
 #------------------------------------------------------------------------------
 # Version 0.9
 # 29 November, 2023
@@ -36,6 +36,7 @@ import seaborn as sns
 
 plt.rcParams["font.family"] = "arial"
 grey80 = '#808080'
+grey82 = '#d1d1d1'
 grey84 = '#d6d6d6'
 grey90 = '#e5e5e5'
                    
@@ -162,9 +163,6 @@ alpha = np.round( 1.0 - ( ci / 100.0 ), 3 )
 variable_list = [ 'BA_Total', 'BA_Forest_NonForest', 'Cem_Total', 'Cem_Forest_NonForest' ]
 timescale_list = [ 'yearly', 'yearly_jj', 'seasonal_mam', 'seasonal_jja', 'seasonal_son', 'seasonal_djf', 'monthly' ]
 
-#variable = variable_list[0]
-#timescale = timescale_list[0]
-
 #----------------------------------------------------------------------------
 # RUN:
 #----------------------------------------------------------------------------
@@ -173,6 +171,10 @@ for variable in variable_list:
     for timescale in timescale_list:
 
         nc_file = 'OUT/' + variable + '.nc'
+
+        ds = xr.load_dataset( nc_file )
+        year_start = ds.time[0].dt.year.values + 0
+        year_end = ds.time[-1].dt.year.values + 0
         
         if variable == 'BA_Total':
             variablestr = 'Burned Area'
@@ -200,6 +202,7 @@ for variable in variable_list:
         	use_all_but_last_year = False
         	method = 'theil_sen'
         	timescalestr = 'Annual (JUL-JUN)'
+        	ds = ds.sel( time=slice(str(year_start) + '-07-01', str(year_end) + '-07-01') ) 
         
         elif timescale == 'seasonal_mam':
         
@@ -207,6 +210,7 @@ for variable in variable_list:
         	use_all_but_last_year = False
         	method = 'theil_sen'    
         	timescalestr = 'Seasonal (MAM)'
+        	ds = ds.sel( time=slice(str(year_start) + '-03-01', str(year_end) + '-05-01') ) 
         
         elif timescale == 'seasonal_jja':
         
@@ -214,6 +218,7 @@ for variable in variable_list:
         	use_all_but_last_year = False
         	method = 'theil_sen'    
         	timescalestr = 'Seasonal (JJA)'
+        	ds = ds.sel( time=slice(str(year_start) + '-06-01', str(year_end) + '-08-01') ) 
         
         elif timescale == 'seasonal_son':
         
@@ -221,6 +226,7 @@ for variable in variable_list:
         	use_all_but_last_year = False
         	method = 'theil_sen'    
         	timescalestr = 'Seasonal (SON)'
+        	ds = ds.sel( time=slice(str(year_start) + '-09-01', str(year_end) + '-11-01') ) 
         
         elif timescale == 'seasonal_djf':
         
@@ -228,6 +234,7 @@ for variable in variable_list:
         	use_all_but_last_year = False
         	method = 'theil_sen'    
         	timescalestr = 'Seasonal (DJF)'
+        	ds = ds.sel( time=slice(str(year_start) + '-12-01', str(year_end) + '-02-01') ) 
         
         elif timescale == 'monthly': 
         
@@ -666,12 +673,14 @@ for variable in variable_list:
         
             # CREDITS:    
         
-            plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(280,80), xycoords='figure pixels', color = grey84, fontsize = fontsize )   
+            #plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(80,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
+            plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(580,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
         
             # LOGO:    
                 
             im = image.imread('logo-cru.png')
-            imax = fig.add_axes([0.36, 0.06, 0.05, 0.05])
+            #imax = fig.add_axes([0.275, 0, 0.125, 0.125])
+            imax = fig.add_axes([0, 0, 0.125, 0.125])
             imax.set_axis_off()
             imax.imshow(im, aspect="equal")
         

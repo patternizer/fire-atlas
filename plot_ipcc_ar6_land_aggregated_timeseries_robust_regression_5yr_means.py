@@ -36,6 +36,7 @@ import seaborn as sns
 
 plt.rcParams["font.family"] = "arial"
 grey80 = '#808080'
+grey82 = '#d1d1d1'
 grey84 = '#d6d6d6'
 grey90 = '#e5e5e5'
                    
@@ -162,17 +163,21 @@ alpha = np.round( 1.0 - ( ci / 100.0 ), 3 )
 variable_list = [ 'BA_Total', 'BA_Forest_NonForest', 'Cem_Total', 'Cem_Forest_NonForest' ]
 timescale_list = [ 'yearly', 'yearly_jj', 'seasonal_mam', 'seasonal_jja', 'seasonal_son', 'seasonal_djf', 'monthly' ]
 
-variable = variable_list[0]
+variable = variable_list[3]
 timescale = timescale_list[0]
+
+#----------------------------------------------------------------------------
+# LOAD: netCDF4
+#----------------------------------------------------------------------------
+
+nc_file = 'OUT/' + variable + '.nc'
+ds = xr.load_dataset( nc_file )
+year_start = ds.time[0].dt.year.values + 0
+year_end = ds.time[-1].dt.year.values + 0
 
 #----------------------------------------------------------------------------
 # RUN:
 #----------------------------------------------------------------------------
-
-#for variable in variable_list:   
-#    for timescale in timescale_list:
-
-nc_file = 'OUT/' + variable + '.nc'
 
 if variable == 'BA_Total':
     variablestr = 'Burned Area'
@@ -193,13 +198,14 @@ if timescale == 'yearly':
 	use_all_but_last_year = False
 	method = 'theil_sen'
 	timescalestr = 'Annual (JAN-DEC)'
-	
+
 elif timescale == 'yearly_jj':
 
 	nsmooth = 5
 	use_all_but_last_year = False
 	method = 'theil_sen'
 	timescalestr = 'Annual (JUL-JUN)'
+	ds = ds.sel( time=slice(str(year_start) + '-07-01', str(year_end) + '-07-01') ) 
 
 elif timescale == 'seasonal_mam':
 
@@ -207,6 +213,7 @@ elif timescale == 'seasonal_mam':
 	use_all_but_last_year = False
 	method = 'theil_sen'    
 	timescalestr = 'Seasonal (MAM)'
+	ds = ds.sel( time=slice(str(year_start) + '-03-01', str(year_end) + '-05-01') ) 
 
 elif timescale == 'seasonal_jja':
 
@@ -214,6 +221,7 @@ elif timescale == 'seasonal_jja':
 	use_all_but_last_year = False
 	method = 'theil_sen'    
 	timescalestr = 'Seasonal (JJA)'
+	ds = ds.sel( time=slice(str(year_start) + '-06-01', str(year_end) + '-08-01') ) 
 
 elif timescale == 'seasonal_son':
 
@@ -221,6 +229,7 @@ elif timescale == 'seasonal_son':
 	use_all_but_last_year = False
 	method = 'theil_sen'    
 	timescalestr = 'Seasonal (SON)'
+	ds = ds.sel( time=slice(str(year_start) + '-09-01', str(year_end) + '-11-01') ) 
 
 elif timescale == 'seasonal_djf':
 
@@ -228,6 +237,7 @@ elif timescale == 'seasonal_djf':
 	use_all_but_last_year = False
 	method = 'theil_sen'    
 	timescalestr = 'Seasonal (DJF)'
+	ds = ds.sel( time=slice(str(year_start) + '-12-01', str(year_end) + '-02-01') ) 
 
 elif timescale == 'monthly': 
 
@@ -238,12 +248,6 @@ elif timescale == 'monthly':
 
 titlestr_ = timescalestr + ' ' + variablestr.lower()
 ylabelstr = variablestr[:1] + variablestr.lower()[1:] + ' ' + unitstr
-
-#----------------------------------------------------------------------------
-# LOAD: netCDF4
-#----------------------------------------------------------------------------
-
-ds = xr.load_dataset( nc_file )
 
 #----------------------------------------------------------------------------
 # EXTRACT: regional mean timeseries and compute statistics
@@ -342,7 +346,7 @@ else:
 # LOOP: over regions
 #----------------------------------------------------------------------------
 
-for i in range(n_regions):
+for i in range(n_regions)[0:3]:
     
     print('Region=', i)
 
@@ -412,6 +416,8 @@ for i in range(n_regions):
     
         t_idx = np.linspace( 0, len(t)-1, num=len(t) )
         y_ols, lower_bound_ols, upper_bound_ols, params_ols, params_ci_ols, pvalues_ols = fit_linear_regression( t_idx, ts, 'robust', ci )
+    
+        lower_bound_ols[ lower_bound_ols < 0 ] = 0.0
     
         intercept_ols = params_ols[0]
         slope_ols = params_ols[1]
@@ -666,12 +672,14 @@ for i in range(n_regions):
 
     # CREDITS:    
 
-    plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(280,80), xycoords='figure pixels', color = grey84, fontsize = fontsize )   
+    #plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(580,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
+    plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(580,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
 
     # LOGO:    
         
     im = image.imread('logo-cru.png')
-    imax = fig.add_axes([0.36, 0.06, 0.05, 0.05])
+    #imax = fig.add_axes([0.275, 0, 0.125, 0.125])
+    imax = fig.add_axes([0, 0, 0.125, 0.125])
     imax.set_axis_off()
     imax.imshow(im, aspect="equal")
 
