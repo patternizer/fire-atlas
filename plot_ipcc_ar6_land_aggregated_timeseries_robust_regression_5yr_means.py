@@ -3,8 +3,8 @@
 #------------------------------------------------------------------------------
 # PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries_robust_regression_5yr_means.py
 #------------------------------------------------------------------------------
-# Version 0.8
-# 27 November, 2023
+# Version 0.9
+# 29 November, 2023
 # Michael Taylor
 # michael DOT a DOT taylor AT uea DOT ac DOT uk 
 #------------------------------------------------------------------------------
@@ -34,10 +34,9 @@ import matplotlib.image as image
 
 import seaborn as sns
 
-#mpl.style.use('ggplot')
-#mpl.rcParams.update({"axes.grid" : True, "grid.color": "lightgrey"})
 plt.rcParams["font.family"] = "arial"
 grey80 = '#808080'
+grey84 = '#d6d6d6'
 grey90 = '#e5e5e5'
                    
 # Stats libraries:
@@ -237,7 +236,7 @@ elif timescale == 'monthly':
 	method = 'ols' # Theil-Sen fails to converge for "flat" LOESS in monthly series
 	timescalestr = 'Monthly'
 
-titlestr_ = timescalestr.title() + ' ' + variablestr.lower()
+titlestr_ = timescalestr + ' ' + variablestr.lower()
 ylabelstr = variablestr[:1] + variablestr.lower()[1:] + ' ' + unitstr
 
 #----------------------------------------------------------------------------
@@ -619,13 +618,13 @@ for i in range(n_regions):
             if pvalues_ols[1] <= alpha:
                 #plt.plot(t, y_ols, color='red', lw=3, label='Theil-Sen (' + r'$\beta_{0}=$' + str( (np.round( params_ols[0], 1)) ) + ', ' + r'$\beta_{1}$=' + str( (np.round( params_ols[1], 1 )) ) + r' $yr^{-1}$)', zorder=5)                            
                 #plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='Theil-Sen 95% c.i. (' + pvaluestr  + ', ' + hypothesis_teststr + ')', zorder=1)
-                plt.plot(t, y_ols, color='red', lw=3, label='Trend (p < 0.05)', zorder=5)                            
+                plt.plot(t, y_ols, color='red', lw=3, label='Trend (if p < 0.05)', zorder=5)                            
                 plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='95% confidence level', zorder=1)
 
             legend_elements = [
                 Line2D( [0], [0], marker='o', markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1, label=variablestr),
                 Line2D( [0], [1], solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='Half-decade average'),
-                Line2D( [1], [0], color='red', lw=3, label='Trend (p < 0.05)'),
+                Line2D( [1], [0], color='red', lw=3, label='Trend (if p < 0.05)'),
                 patches.Patch( [1], [1], color='red', alpha=0.1, label='95% confidence level')                                
             ]    
             plt.legend( handles = legend_elements, ncol=2, labelcolor = grey80, fontsize = fontsize, loc='center', bbox_to_anchor=(0.7, -0.2), fancybox = False, shadow = False, frameon=True )
@@ -667,7 +666,7 @@ for i in range(n_regions):
 
     # CREDITS:    
 
-    plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(280,80), xycoords='figure pixels', color = grey90, fontsize = fontsize )   
+    plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(280,80), xycoords='figure pixels', color = grey84, fontsize = fontsize )   
 
     # LOGO:    
         
