@@ -420,6 +420,8 @@ for variable in variable_list:
                 t_idx = np.linspace( 0, len(t)-1, num=len(t) )
                 y_ols, lower_bound_ols, upper_bound_ols, params_ols, params_ci_ols, pvalues_ols = fit_linear_regression( t_idx, ts, 'robust', ci )
             
+                lower_bound_ols[ lower_bound_ols < 0 ] = 0.0            
+            
                 intercept_ols = params_ols[0]
                 slope_ols = params_ols[1]
             
