@@ -3,8 +3,8 @@
 #------------------------------------------------------------------------------
 # PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries_robust_regression_5yr_means_run_all.py
 #------------------------------------------------------------------------------
-# Version 0.9
-# 29 November, 2023
+# Version 0.11
+# 8 December, 2023
 # Michael Taylor
 # michael DOT a DOT taylor AT uea DOT ac DOT uk 
 #------------------------------------------------------------------------------
@@ -13,8 +13,10 @@
 
 import numpy as np
 import pandas as pd
+from pandas.tseries.offsets import DateOffset
 import xarray as xr
 import regionmask
+from datetime import date
 
 # Plotting libraries:
     
@@ -177,74 +179,67 @@ for variable in variable_list:
         year_end = ds.time[-1].dt.year.values + 0
         
         if variable == 'BA_Total':
-            variablestr = 'Burned Area'
+            variablestr = 'burned area by all fires'
             unitstr = '(thousand km' + r'$^{2}$' + ')'
         elif variable == 'BA_Forest_NonForest':
-            variablestr = 'Burned Area (in forest)'
+            variablestr = 'burned area by forest fires'
             unitstr = '(thousand km' + r'$^{2}$' + ')'
         elif variable == 'Cem_Total':
-            variablestr = 'Carbon Emissions'
+            variablestr = 'carbon emissions from all fires'
             unitstr = '(thousand tonnes C)'
         elif variable == 'Cem_Forest_NonForest':
-            variablestr = 'Carbon Emissions (in forest)'
+            variablestr = 'carbon emissions from forest fires'
             unitstr = '(thousand tonnes C)'
         
         if timescale == 'yearly':
         
         	nsmooth = 5
-        	use_all_but_last_year = False
-        	method = 'theil_sen'
+        	method = 'robust'
         	timescalestr = 'Annual (JAN-DEC)'
         	
         elif timescale == 'yearly_jj':
         
         	nsmooth = 5
-        	use_all_but_last_year = False
-        	method = 'theil_sen'
+        	method = 'robust'
         	timescalestr = 'Annual (JUL-JUN)'
-        	ds = ds.sel( time=slice(str(year_start) + '-07-01', str(year_end) + '-07-01') ) 
+        	#ds = ds.sel( time=slice(str(year_start) + '-07-01', str(year_end) + '-07-01') ) 
         
         elif timescale == 'seasonal_mam':
         
         	nsmooth = 5
-        	use_all_but_last_year = False
-        	method = 'theil_sen'    
+        	method = 'robust'    
         	timescalestr = 'Seasonal (MAM)'
-        	ds = ds.sel( time=slice(str(year_start) + '-03-01', str(year_end) + '-05-01') ) 
+        	#ds = ds.sel( time=slice(str(year_start) + '-03-01', str(year_end) + '-05-01') ) 
         
         elif timescale == 'seasonal_jja':
         
         	nsmooth = 5
-        	use_all_but_last_year = False
-        	method = 'theil_sen'    
+        	method = 'robust'    
         	timescalestr = 'Seasonal (JJA)'
-        	ds = ds.sel( time=slice(str(year_start) + '-06-01', str(year_end) + '-08-01') ) 
+        	#ds = ds.sel( time=slice(str(year_start) + '-06-01', str(year_end) + '-08-01') ) 
         
         elif timescale == 'seasonal_son':
         
         	nsmooth = 5
-        	use_all_but_last_year = False
-        	method = 'theil_sen'    
+        	method = 'robust'    
         	timescalestr = 'Seasonal (SON)'
-        	ds = ds.sel( time=slice(str(year_start) + '-09-01', str(year_end) + '-11-01') ) 
+        	#ds = ds.sel( time=slice(str(year_start) + '-09-01', str(year_end) + '-11-01') ) 
         
         elif timescale == 'seasonal_djf':
         
         	nsmooth = 5
-        	use_all_but_last_year = False
-        	method = 'theil_sen'    
+        	method = 'robust'    
         	timescalestr = 'Seasonal (DJF)'
-        	ds = ds.sel( time=slice(str(year_start) + '-12-01', str(year_end) + '-02-01') ) 
+        	#ds = ds.sel( time=slice(str(year_start) + '-12-01', str(year_end) + '-02-01') ) 
         
         elif timescale == 'monthly': 
         
         	nsmooth = 60
-        	use_all_but_last_year = False
         	method = 'ols' # Theil-Sen fails to converge for "flat" LOESS in monthly series
         	timescalestr = 'Monthly'
         
-        titlestr_ = timescalestr + ' ' + variablestr.lower()
-        ylabelstr = variablestr[:1] + variablestr.lower()[1:] + ' ' + unitstr
+        titlestr_ = timescalestr + ' ' + variablestr
+        ylabelstr = variablestr.title()[:1] + variablestr[1:] + ' ' + unitstr
         
         #----------------------------------------------------------------------------
         # LOAD: netCDF4
@@ -266,24 +261,18 @@ for variable in variable_list:
             
             Z = Z / 1.0e9
         
+        '''
+        # This approach was the initial approach adopted to produce v1 of the atlas.
+        # However, the absence of a count method in the region-masked xarray implementation
+        # of regionmask meant that an alternative approach was needed to achieve this.
+                
         if timescale == 'yearly':
         
         	Z = Z.resample(time="AS").sum(dim="time")   
-        
-        	if use_all_but_last_year == True:    
-        		
-        		Z = Z.sel(time=slice(Z.time[0],Z.time[-2]))
-        
+                
         elif timescale == 'yearly_jj':
         
-        	Z = Z.resample(time='AS-JUL').sum('time') # anchored offset for the austral year
-        
-        	'''
-        	PANDAS: implementation:
-        		
-        	# DT.groupby(pd.DatetimeIndex(DT.Date).shift(-3,freq='m').year)    
-        	# DT.groupby(DT.index.shift(-3,freq='m').year)
-        	'''
+        	Z = Z.resample(time='AS-JUL').sum('time') # anchored offset for the austral year        
         
         elif timescale == 'seasonal_mam':
         
@@ -324,7 +313,7 @@ for variable in variable_list:
         	Z = Z.groupby(Z.time.dt.year).sum("time")
         	Z = Z.rename({'year':'time'})            
         	Z['time'] = pd.date_range(start=str(Z.time[0].values), end=str(Z.time[-1].values), freq = 'AS')
-        		
+        '''		
         # SET: zeros to NaN (impacts means if calculated)
         
         #Z = Z.where(Z > 0.0)
@@ -355,33 +344,162 @@ for variable in variable_list:
         
             # EXTRACT: regional timeseries    
         
-            t = Z.time.values
+            t = Z_regional_sum.time.values
             ts = Z_regional_sum.isel(region=i).values    
-        
-            ''' 
-            # APPLY: year mask
-        
-            if timescale == 'yearly':
-        
-                # YEAR MASK: incomplete years
+
+            if timescale != 'monthly':
+                
+                # PUT: in Pandas dataframe         
+    
+                df = pd.DataFrame({'ts':ts}, index=t)   
+                
+                # ADD: month column for resampled sum count
+                
+                df['month'] = df.index.month.values 
+                
+                # EXTRACT: yearly datestamps
+                
+                t_yearly = [ pd.to_datetime( str( df.index.year.unique()[k] ) + '-01-01', format='%Y-%m-%d' ) for k in range( len( df.index.year.unique() ) ) ] # Timestamp('YYYY-01-01 00:00:00')]
+                                                
+                # SET: resanpled ts, offset and completeness counts 
+                
+                if timescale == 'yearly': 
+                    
+                    # EXTRACT: JAN-DEC yearly sums (NB: like DJF this spans 2 years)
+ 
+                    yearly = df.resample('AS').sum().ts.values
+                    count_n = df.resample('AS').count().month.values
+ 
+                    ts = yearly             
+                    offset = 6
+                    completeness = 12
+
+                elif timescale == 'yearly_jj': 
+
+                    # EXTRACT: JUL-JUN austral yearly sums and year counts (NB: like DJF this spans 2 years)
+                            
+                    yearly_jj = df.resample('AS-JUL').sum().ts.values
+                    count_n = df.resample('AS-JUL').count().month.values
+
+                    if len(yearly_jj) != len(t_yearly):
                         
-                t = Z.time.values
-                years = np.array( [ pd.Series(t)[i].year for i in range(len(t)) ] )
-                year_mask = []
-                for year in np.unique(years):
-                    if len( years[years == year] ) == 12:
-                        year_mask.append( True )
-                    else:
-                        year_mask.append( False )
+                        yearly_jj = df.resample('AS-JUL').sum()[0:-1].ts.values
+                        count_n = df.resample('AS-JUL').count()[0:-1].month.values
+                                            
+                    ts = yearly_jj 
+                    offset = 0
+                    completeness = 12
+
+                elif timescale == 'seasonal_djf': 
+                    
+                    # EXTRACT: seasonal djf sum and triplet count (NB: DJF spans first two years)
+                    
+                    #seasonal_djf = df[ df.index.month==12 ]['ts'].values[0:-1] + df[ df.index.month==1 ]['ts'].values[1:] + df[ df.index.month==2 ]['ts'].values[1:]
+                    #seasonal_djf = np.hstack([np.nan, seasonal_djf]) # first DJF spans year 1 (D) and year 2 (JF)
+                    #seasonal_mam = df[ df.index.month==3 ]['ts'].values + df[ df.index.month==4 ]['ts'].values + df[ df.index.month==5 ]['ts'].values
+                    #seasonal_jja = df[ df.index.month==6 ]['ts'].values + df[ df.index.month==7 ]['ts'].values + df[ df.index.month==8 ]['ts'].values
+                    #seasonal_son = df[ df.index.month==9 ]['ts'].values + df[ df.index.month==10 ]['ts'].values + df[ df.index.month==11 ]['ts'].values
+                                        
+                    seasonal_djf = [0.0]
+                    count_n = []        
+                    if np.isfinite( df[ df.index.month==12 ]['ts'].values[ 0 ] ):                    
+                        count_n.append( 1 )                    
+                    else:                    
+                        count_n.append( 0 )    
+                    for k in range( 1, len( t_yearly ) ):    
+                        try:
+                            seasonal_djf_triplet = df[ df.index.month==12 ]['ts'].values[ k-1 ] + df[ df.index.month==1 ]['ts'].values[k] + df[ df.index.month==2 ]['ts'].values[k]
+                            seasonal_djf_triplet_count = np.array( [np.isfinite( df[ df.index.month==12 ]['ts'].values[ k-1 ] ), np.isfinite( df[ df.index.month==1 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==2 ]['ts'].values[k] ) ] ).sum()
+                        except:
+                            seasonal_djf_triplet = 0.0
+                            seasonal_djf_triplet_count = 0
+                        if seasonal_djf_triplet_count == 3:
+                            seasonal_djf.append( seasonal_djf_triplet )
+                        else:
+                            seasonal_djf.append( 0.0 )
+                        count_n.append( seasonal_djf_triplet_count )                
+                                        
+                    ts = seasonal_djf            
+                    offset = 1
+                    completeness = 3
+
+                elif timescale == 'seasonal_mam': 
+
+                    # EXTRACT: seasonal MAM sum and triplet count
+                    
+                    seasonal_mam = []
+                    count_n = []
+                    for k in range(len( t_yearly )):
+                        try:                    
+                            seasonal_mam_triplet = df[ df.index.month==3 ]['ts'].values[k] + df[ df.index.month==4 ]['ts'].values[k] + df[ df.index.month==5 ]['ts'].values[k]
+                            seasonal_mam_triplet_count = np.array( [np.isfinite( df[ df.index.month==3 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==4 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==5 ]['ts'].values[k] ) ] ).sum()
+                        except:
+                            seasonal_mam_triplet = 0.0
+                            seasonal_mam_triplet_count = 0                        
+                        if seasonal_mam_triplet_count == 3:
+                            seasonal_mam.append( seasonal_mam_triplet )
+                        else:
+                            seasonal_mam.append( 0.0 )
+                        count_n.append( seasonal_mam_triplet_count )
+                    
+                    ts = seasonal_mam            
+                    offset = 3
+                    completeness = 3
+
+                elif timescale == 'seasonal_jja': 
+                    
+                    # EXTRACT: seasonal JJA sum and triplet count
+
+                    seasonal_jja = []
+                    count_n = []
+                    for k in range(len( t_yearly )):
+                        try:       
+                            seasonal_jja_triplet = df[ df.index.month==6 ]['ts'].values[k] + df[ df.index.month==7 ]['ts'].values[k] + df[ df.index.month==8 ]['ts'].values[k]
+                            seasonal_jja_triplet_count = np.array( [np.isfinite( df[ df.index.month==6 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==7 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==8 ]['ts'].values[k] ) ] ).sum()
+                        except:
+                            seasonal_jja_triplet = 0.0
+                            seasonal_jja_triplet_count = 0
+                        if seasonal_jja_triplet_count == 3:
+                            seasonal_jja.append( seasonal_jja_triplet )
+                        else:
+                            seasonal_jja.append( 0.0 )
+                        count_n.append( seasonal_jja_triplet_count )
+
+                    ts = seasonal_jja                
+                    offset = 6
+                    completeness = 3
+
+                elif timescale == 'seasonal_son': 
+
+                    # EXTRACT: seasonal SON sum and triplet count
+
+                    seasonal_son = []
+                    count_n = []
+                    for k in range(len( t_yearly )):
+                        try:    
+                            seasonal_son_triplet = df[ df.index.month==9 ]['ts'].values[k] + df[ df.index.month==10 ]['ts'].values[k] + df[ df.index.month==11 ]['ts'].values[k]
+                            seasonal_son_triplet_count = np.array( [np.isfinite( df[ df.index.month==9 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==10 ]['ts'].values[k] ), np.isfinite( df[ df.index.month==11 ]['ts'].values[k] ) ] ).sum()
+                        except:
+                            seasonal_son_triplet = 0.0
+                            seasonal_son_triplet_count = 0
+                        if seasonal_son_triplet_count == 3:
+                            seasonal_son.append( seasonal_son_triplet )
+                        else:
+                            seasonal_son.append( 0.0 )
+                        count_n.append( seasonal_son_triplet_count )
+                    
+                    ts = seasonal_son            
+                    offset = 9
+                    completeness = 3
                 
-                t = t[ year_mask ]
-                ts = ts[ year_mask ]
-            '''
-                
+                # SET: time 
+    
+                t = pd.to_datetime( t_yearly ) + pd.DateOffset( months = offset )
+                                                
             tstart_ols = t[0]
             tend_ols = t[-1]
         
-            # INITIALISE: stat vectors
+            # COMPUTE: goodness of fit stats
         
             fittypes = []
             slopes = []
@@ -403,27 +521,29 @@ for variable in variable_list:
             else:
         
                 no_data = False
-        
+                
                 # SMOOTH: with a Gaussian filter (windowed) - to stabilise LOESS fit
                 
-                ts_before_mean = np.nanmean( ts[0:int(nsmooth/2)] )
-                ts_after_mean = np.nanmean( ts[-int(nsmooth/2)-1:] )
+                ts_before_mean = np.nanmean( ts[ 0:int(nsmooth/2) ] )
+                ts_after_mean = np.nanmean( ts[ -int(nsmooth/2)-1: ] )
                 ts_windowed = np.hstack([ np.ones( int(nsmooth/2) ) * ts_before_mean, ts, np.ones( int(nsmooth/2) ) * ts_after_mean ])
-                ts_smoothed = pd.Series( ts_windowed ).rolling( nsmooth, center=True, win_type='gaussian').mean(std=3).values[int(nsmooth/2):-int(nsmooth/2):]
+                ts_smoothed = pd.Series( ts_windowed ).rolling( nsmooth, center=True, win_type='gaussian').mean( std=3 ).values[ int(nsmooth/2):-int(nsmooth/2): ]
             
-                # LOESS fit to smooth
+                # FIT: LOESS to end-to-end smoothed ts
             
                 y_loess = sm.nonparametric.lowess( exog=t, endog=ts_smoothed, frac=loess_frac )[:,1]
             
-                # robust OLS fit to LOESS + goodness of fit stats
+                # FIT: robust OLS to LOESS + compute goodness of fit stats
             
                 t_idx = np.linspace( 0, len(t)-1, num=len(t) )
-                y_ols, lower_bound_ols, upper_bound_ols, params_ols, params_ci_ols, pvalues_ols = fit_linear_regression( t_idx, ts, 'robust', ci )
+                y_ols, lower_bound_ols, upper_bound_ols, params_ols, params_ci_ols, pvalues_ols = fit_linear_regression( t_idx, ts, method, ci )
             
                 lower_bound_ols[ lower_bound_ols < 0 ] = 0.0            
             
                 intercept_ols = params_ols[0]
                 slope_ols = params_ols[1]
+
+                # PERFORM: linear regression t-test
             
                 hypothesis_test_ols = int( pvalues_ols[1] < alpha )
                 if hypothesis_test_ols == 0:
@@ -443,14 +563,31 @@ for variable in variable_list:
             tends.append( tend_ols )
                 
             #----------------------------------------------------------------------------
-            # 5-yr rolling means
+            # COMPUTE: 5-yr rolling means
             #----------------------------------------------------------------------------
-            
-            #y = ts.isel(region=i).values
-            y = ts
-            s = pd.Series( y, index = t )    
-            if timescale == 'yearly':
+                        
+            y = np.array( ts )
+                        
+            if timescale != 'monthly':
+
+                # SET: incomplete resampled period sums to NaN                
+
+                count_n = np.array( count_n )
+
+                if no_data == False:
+
+                    y[ count_n != completeness ] = np.nan
+                    y_ols[ count_n != completeness ] = np.nan
+                    lower_bound_ols[ count_n != completeness ] = np.nan
+                    upper_bound_ols[ count_n != completeness ] = np.nan
+
+                else:
+                    
+                    y[ count_n != completeness ] = np.nan
+                                    
+                # COMPUTE: half-decade interval mean of resampled sums and completeness count
                 
+                s = pd.Series( y, index = t )                            
                 df_intervals = pd.DataFrame([
                     ['2000-01-01', '2004-12-31'],
                     ['2005-01-01', '2009-12-31'],
@@ -458,63 +595,16 @@ for variable in variable_list:
                     ['2015-01-01', '2019-12-31'],
                     ['2020-01-01', '2024-12-31'],        
                 ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
+                #df_intervals['StartDate'] = df_intervals['StartDate'] + pd.DateOffset( months = offset )
+                #df_intervals['EndDate'] = df_intervals['EndDate'] + pd.DateOffset( months = offset )
                 df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
-        
-            elif timescale == 'yearly_jj':
-        
-                df_intervals = pd.DataFrame([
-                    ['2000-07-01', '2005-06-30'],
-                    ['2005-07-01', '2010-06-30'],
-                    ['2010-07-01', '2015-06-30'],
-                    ['2015-07-01', '2020-06-30'],
-                    ['2020-07-01', '2025-06-30'],        
-                ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
-                df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
-        
-            elif timescale == 'seasonal_djf':
-        
-                df_intervals = pd.DataFrame([
-                    ['2000-01-01', '2004-12-31'],
-                    ['2005-01-01', '2009-12-31'],
-                    ['2010-01-01', '2014-12-31'],
-                    ['2015-01-01', '2019-12-31'],
-                    ['2020-01-01', '2024-12-31'],        
-                ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
-                df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
-        
-            elif timescale == 'seasonal_mam':
-        
-                df_intervals = pd.DataFrame([
-                    ['2000-01-01', '2004-12-31'],
-                    ['2005-01-01', '2009-12-31'],
-                    ['2010-01-01', '2014-12-31'],
-                    ['2015-01-01', '2019-12-31'],
-                    ['2020-01-01', '2024-12-31'],        
-                ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
-                df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
-        
-            elif timescale == 'seasonal_jja':
-        
-                df_intervals = pd.DataFrame([
-                    ['2000-01-01', '2004-12-31'],
-                    ['2005-01-01', '2009-12-31'],
-                    ['2010-01-01', '2014-12-31'],
-                    ['2015-01-01', '2019-12-31'],
-                    ['2020-01-01', '2024-12-31'],        
-                ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
-                df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
-        
-            elif timescale == 'seasonal_son':
-        
-                df_intervals = pd.DataFrame([
-                    ['2000-01-01', '2004-12-31'],
-                    ['2005-01-01', '2009-12-31'],
-                    ['2010-01-01', '2014-12-31'],
-                    ['2015-01-01', '2019-12-31'],
-                    ['2020-01-01', '2024-12-31'],        
-                ], columns=['StartDate', 'EndDate'], dtype='datetime64[ns]')
-                df_intervals['5yr-mean'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].mean(), axis=1)
-               
+                df_intervals['count'] = df_intervals.apply(lambda row: s[(row['StartDate'] <= s.index) & (s.index < row['EndDate'])].count(), axis=1)
+
+                # SET: to NAN 5yr-mean if count < 3                                                    
+
+                mask = (df_intervals['count'] >= 3)
+                df_intervals['5yr-mean'] = df_intervals['5yr-mean'].where(mask, np.nan) # NB: mask works in opposite way to standard masking!                
+                
             #----------------------------------------------------------------------------
             # SAVE: regional timeseries to CSV
             #----------------------------------------------------------------------------
@@ -527,8 +617,10 @@ for variable in variable_list:
                 df_timeseries['sum'] = ts
                 df_timeseries['variable'] = [variable] * len(years)
                 df_timeseries['timescale'] = [timescale] * len(years)
-                df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
-                df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+                #df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
+                df_timeseries['region'] = [ mask_3D.abbrevs.values[i] ] * len(years)    
+                #df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+                df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.csv', index = False )
         		
             else:
         
@@ -546,12 +638,13 @@ for variable in variable_list:
         
                 df_timeseries = pd.DataFrame(columns=['year', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'variable', 'timescale', 'region'])
                 df_timeseries['year'] = years        
-                for m in range(12):
-                    df_timeseries[str(m+1)] = ts_filled_array[:,m]
+                for m in range(12): df_timeseries[str(m+1)] = ts_filled_array[:,m]
                 df_timeseries['variable'] = [variable] * len(years)
                 df_timeseries['timescale'] = [timescale] * len(years)
-                df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
-                df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+                #df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
+                df_timeseries['region'] = [ mask_3D.abbrevs.values[i] ] * len(years)    
+                #df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+                df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.csv', index = False )
         		
             #----------------------------------------------------------------------------
             # SAVE: regional trend stats to CSV
@@ -567,15 +660,18 @@ for variable in variable_list:
             df_stats['R2adj'] = R2adjs            
             df_stats['variable'] = [variable] * len(fittypes)
             df_stats['timescale'] = [timescale] * len(fittypes)
-            df_stats['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(fittypes)
+            #df_stats['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(fittypes)
+            df_stats['region'] = [ mask_3D.abbrevs.values[i] ] * len(fittypes)
             df_stats = df_stats.round(decimals=6)    
-            df_stats.to_csv( 'RUN/' + variable + '-' + 'stats' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+            #df_stats.to_csv( 'RUN/' + variable + '-' + 'stats' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+            df_stats.to_csv( 'RUN/' + variable + '-' + 'stats' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.csv', index = False )
         
             #----------------------------------------------------------------------------
             # PLOT: regional timeseries with LOESS, OLS and 3-segement trend lines
             #----------------------------------------------------------------------------
         
-            figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.png'
+            #figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.png'
+            figstr = variable + '-' + 'ipcc-ar6-land-region-timeseries' + '-' + 'sum' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.png'
         
             fig, ax = plt.subplots(figsize=(13.33,7.5))
         
@@ -595,40 +691,46 @@ for variable in variable_list:
                     # PLOT: timeseries
             
                     plt.plot( t, y, 'o', markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1, label=variablestr, zorder=10 )        
-            
+                           
                     # PLOT: 5-yr interval means
-                    
-                    tdelta = int(365/2)                    
+                                                          
                     for k in range(len(df_intervals)):
-                        
-                        if (k < len(df_intervals) - 1):
-                            t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - np.timedelta64( tdelta, 'D')
-                        else: 
-                            t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - np.timedelta64( tdelta, 'D')
-                            if len(t_interval) > 1:
-                                t_interval[-1] = t_interval[-1] + np.timedelta64(365,'D')
-                            else:
-                                t_interval = np.hstack( [ t_interval, t_interval[-1] + np.timedelta64(365,'D') ] )                
-                    
+
+                        if timescale == 'yearly_jj':
+
+                            if (k < len(df_intervals) - 1):
+                                t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - pd.DateOffset( months = 6 )
+                            else: 
+                                t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - pd.DateOffset( months = 6 )
+                                t_interval.freq = 'AS-JUL'
+                                t_interval = t_interval.union([ t_interval[-1] + 1*t_interval.freq ])     
+
+                        else:
+                                                    
+                            if (k < len(df_intervals) - 1):
+                                t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - pd.DateOffset( months = offset )
+                                t_interval.freq = 'AS'
+                                t_interval = t_interval.union([ t_interval[-1] + 1*t_interval.freq ])                            
+                            else: 
+                                t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - pd.DateOffset( months = offset )
+                                t_interval.freq = 'AS'
+                                t_interval = t_interval.union([ t_interval[-1] + 1*t_interval.freq ])                            
+                                                   
                         y_interval = [ df_intervals['5yr-mean'][k] ] * len( t_interval )
                         if k == 0:
-                            #plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='5-yr mean', zorder=4 )
                             plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='Half-decade average', zorder=4 )
                         else:
-                            plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, zorder=4 )
-                
+                            if len( y_interval ) > 1:
+                                plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, zorder=4 )                    
+                    
                     # PLOT: robust OLS uncertainty band + p-value
-                
-                    if pvalues_ols[1] < 0.001:            
-                        pvaluestr = 'p<0.001'
-                    else:
-                        pvaluestr = 'p=' + str( np.round( pvalues_ols[1], 3 ) )
-                
+                                
                     if pvalues_ols[1] <= alpha:
-                        #plt.plot(t, y_ols, color='red', lw=3, label='Theil-Sen (' + r'$\beta_{0}=$' + str( (np.round( params_ols[0], 1)) ) + ', ' + r'$\beta_{1}$=' + str( (np.round( params_ols[1], 1 )) ) + r' $yr^{-1}$)', zorder=5)                            
-                        #plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='Theil-Sen 95% c.i. (' + pvaluestr  + ', ' + hypothesis_teststr + ')', zorder=1)
+
                         plt.plot(t, y_ols, color='red', lw=3, label='Trend (if p < 0.05)', zorder=5)                            
                         plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='95% confidence level', zorder=1)
+        
+                    # CREATE: static legend
         
                     legend_elements = [
                         Line2D( [0], [0], marker='o', markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1, label=variablestr),
