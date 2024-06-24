@@ -3,8 +3,8 @@
 #------------------------------------------------------------------------------
 # PROGRAM: plot_ipcc_ar6_land_aggregated_timeseries_robust_regression_5yr_means_run_all.py
 #------------------------------------------------------------------------------
-# Version 0.11
-# 8 December, 2023
+# Version 0.14
+# 24 June, 2024
 # Michael Taylor
 # michael DOT a DOT taylor AT uea DOT ac DOT uk 
 #------------------------------------------------------------------------------
@@ -60,6 +60,7 @@ from lineartree import LinearTreeClassifier, LinearTreeRegressor
 import pwlf
 import random
 import itertools
+import pymannkendall as mk
 
 # Silence library version notifications
 import warnings
@@ -97,7 +98,10 @@ def fit_linear_regression( x, y, method, ci ):
         model = sm.RLM(y, X).fit() # Theil-Sen
 
     y_fit = model.predict(X)    
-    
+
+    params_mann_kendall = mk.original_test(y)    
+    #trend, h, p, z, Tau, s, var_s, slope, intercept = mk.original_test(y, X)
+
     # COMPUTE: number of standard deviations corresponding to c.i.
         
     alpha = 1 - ( ci / 100 )                    # significance level (0.05)
@@ -139,7 +143,7 @@ def fit_linear_regression( x, y, method, ci ):
     params_ci = model.conf_int(alpha=alpha)    
     pvalues = model.pvalues
 
-    return y_fit, lower_bound, upper_bound, params, params_ci, pvalues
+    return y_fit, lower_bound, upper_bound, params, params_ci, pvalues, se, params_mann_kendall
 
 #----------------------------------------------------------------------------
 # SETTINGS
@@ -165,6 +169,9 @@ alpha = np.round( 1.0 - ( ci / 100.0 ), 3 )
 variable_list = [ 'BA_Total', 'BA_Forest_NonForest', 'Cem_Total', 'Cem_Forest_NonForest' ]
 timescale_list = [ 'yearly', 'yearly_jj', 'seasonal_mam', 'seasonal_jja', 'seasonal_son', 'seasonal_djf', 'monthly' ]
 
+#variable_list = [ 'BA_Forest_NonForest']
+#timescale_list = [ 'yearly' ]
+
 #----------------------------------------------------------------------------
 # RUN:
 #----------------------------------------------------------------------------
@@ -179,17 +186,21 @@ for variable in variable_list:
         year_end = ds.time[-1].dt.year.values + 0
         
         if variable == 'BA_Total':
-            variablestr = 'burned area by all fires'
+            variablestr = 'Area Burned by All Fires'
             unitstr = '(thousand km' + r'$^{2}$' + ')'
+            unit = 'thousand_km2'
         elif variable == 'BA_Forest_NonForest':
-            variablestr = 'burned area by forest fires'
+            variablestr = 'Area Burned by Forest Fires'
             unitstr = '(thousand km' + r'$^{2}$' + ')'
+            unit = 'thousand_km2'
         elif variable == 'Cem_Total':
-            variablestr = 'carbon emissions from all fires'
+            variablestr = 'Carbon Emissions from All Fires'
             unitstr = '(thousand tonnes C)'
+            unit = 'thousand_tonnes_C'
         elif variable == 'Cem_Forest_NonForest':
-            variablestr = 'carbon emissions from forest fires'
+            variablestr = 'Carbon Emissions from Forest Fires'
             unitstr = '(thousand tonnes C)'
+            unit = 'thousand_tonnes_C'
         
         if timescale == 'yearly':
         
@@ -239,7 +250,8 @@ for variable in variable_list:
         	timescalestr = 'Monthly'
         
         titlestr_ = timescalestr + ' ' + variablestr
-        ylabelstr = variablestr.title()[:1] + variablestr[1:] + ' ' + unitstr
+        #ylabelstr = variablestr.title()[:1] + variablestr[1:] + ' ' + unitstr
+        ylabelstr = variablestr + ' ' + unitstr
         
         #----------------------------------------------------------------------------
         # LOAD: netCDF4
@@ -502,8 +514,16 @@ for variable in variable_list:
             # COMPUTE: goodness of fit stats
         
             fittypes = []
-            slopes = []
             intercepts = []
+            intercepts_lower = []
+            intercepts_upper = []            
+            slopes = []
+            slopes_lower = []
+            slopes_upper = []
+            slopes_mann_kendall = []
+            SEs = []
+            pvalues_intercept = []
+            pvalues_slope = []
             corrcoefs = []
             R2adjs = []
             tstarts = []
@@ -514,7 +534,15 @@ for variable in variable_list:
                 no_data = True
         
                 slope_ols = np.nan 
+                slope_ols_lower = np.nan 
+                slope_ols_upper = np.nan 
+                slope_ols_mann_kendall = np.nan 
                 intercept_ols = np.nan 
+                intercept_ols_lower = np.nan 
+                intercept_ols_upper = np.nan 
+                SE_ols = np.nan
+                pvalue_intercept = np.nan
+                pvalue_slope = np.nan
                 corrcoef_ols = np.nan 
                 R2adj_ols = np.nan 
                 
@@ -536,16 +564,28 @@ for variable in variable_list:
                 # FIT: robust OLS to LOESS + compute goodness of fit stats
             
                 t_idx = np.linspace( 0, len(t)-1, num=len(t) )
-                y_ols, lower_bound_ols, upper_bound_ols, params_ols, params_ci_ols, pvalues_ols = fit_linear_regression( t_idx, ts, method, ci )
+                y_ols, lower_bound_ols, upper_bound_ols, params_ols, params_ci_ols, pvalues_ols, se_ols, params_mann_kendall = fit_linear_regression( t_idx, ts, method, ci )
             
                 lower_bound_ols[ lower_bound_ols < 0 ] = 0.0            
             
-                intercept_ols = params_ols[0]
                 slope_ols = params_ols[1]
+                slope_ols_lower = params_ci_ols[1][0]
+                slope_ols_upper = params_ci_ols[1][1]                    
+                slope_ols_mann_kendall = params_mann_kendall.slope
+                intercept_ols = params_ols[0]
+                intercept_ols_lower = params_ci_ols[0][0]
+                intercept_ols_upper = params_ci_ols[0][1]                
+                pvalue_intercept = pvalues_ols[0]
+                pvalue_slope = pvalues_ols[1]
 
+                #==============================================================
                 # PERFORM: linear regression t-test
+                #==============================================================
             
-                hypothesis_test_ols = int( pvalues_ols[1] < alpha )
+                hypothesis_test_ols = int( pvalue_slope < alpha )
+
+                if slope_ols_mann_kendall == 0: hypothesis_test_ols = 0
+
                 if hypothesis_test_ols == 0:
                     hypothesis_teststr = r'$H_{0}$'
                 else:
@@ -556,7 +596,15 @@ for variable in variable_list:
                 
             fittypes.append( 'theil-sen' )
             slopes.append( slope_ols )
+            slopes_lower.append( slope_ols_lower )
+            slopes_upper.append( slope_ols_upper )
+            slopes_mann_kendall.append( slope_ols_mann_kendall )
             intercepts.append( intercept_ols )
+            intercepts_lower.append( intercept_ols_lower )
+            intercepts_upper.append( intercept_ols_upper )
+            SEs.append( se_ols )
+            pvalues_intercept.append( pvalue_intercept )
+            pvalues_slope.append( pvalue_slope )
             corrcoefs.append( corrcoef_ols )
             R2adjs.append( R2adj_ols )
             tstarts.append( tstart_ols )
@@ -610,21 +658,27 @@ for variable in variable_list:
             #----------------------------------------------------------------------------
         
             if timescale != 'monthly':
-        
+							        
                 years = np.array( [ pd.Series(t)[i].year for i in range(len(t)) ] )
-                df_timeseries = pd.DataFrame(columns=['year', 'sum', 'variable', 'timescale', 'region'])
+                units = np.array( [ unit ] * len(years) )
+
+#                df_timeseries = pd.DataFrame(columns=['year', 'sum', 'variable', 'timescale', 'region'])
+                df_timeseries = pd.DataFrame(columns=['variable', 'timescale', 'region', 'year', 'sum', 'unit'])
+                if variable == 'BA_Forest_NonForest': df_timeseries['variable'] = ['BA_Forest'] * len(years)
+                elif variable == 'Cem_Forest_NonForest': df_timeseries['variable'] = ['Cem_Forest'] * len(years)
+                else: df_timeseries['variable'] = [variable] * len(years)
+                df_timeseries['timescale'] = [timescale] * len(years)
+                df_timeseries['region'] = [ mask_3D.abbrevs.values[i] ] * len(years)    
                 df_timeseries['year'] = years
                 df_timeseries['sum'] = ts
-                df_timeseries['variable'] = [variable] * len(years)
-                df_timeseries['timescale'] = [timescale] * len(years)
-                #df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
-                df_timeseries['region'] = [ mask_3D.abbrevs.values[i] ] * len(years)    
-                #df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+                df_timeseries['unit'] = units                             
+                df_timeseries = df_timeseries.round(decimals=3)    
                 df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.csv', index = False )
         		
             else:
         
                 years = np.unique( np.array( [ pd.Series(t)[i].year for i in range(len(t)) ] ) )
+                units = np.array( [ unit ] * len(years) )
                 datetimes_data = np.array( [ pd.Series(t)[i] for i in range(len(t)) ] )
         
                 # PAD: timeseries to complete years
@@ -636,34 +690,52 @@ for variable in variable_list:
                 ts_filled = df.ts.values
                 ts_filled_array = ts_filled.reshape( [len(years), 12] )
         
-                df_timeseries = pd.DataFrame(columns=['year', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'variable', 'timescale', 'region'])
-                df_timeseries['year'] = years        
-                for m in range(12): df_timeseries[str(m+1)] = ts_filled_array[:,m]
-                df_timeseries['variable'] = [variable] * len(years)
+#                df_timeseries = pd.DataFrame(columns=['year', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'variable', 'timescale', 'region'])
+                df_timeseries = pd.DataFrame(columns=['variable', 'timescale', 'region', 'year', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', 'unit' ])
+                if variable == 'BA_Forest_NonForest': df_timeseries['variable'] = ['BA_Forest'] * len(years)
+                elif variable == 'Cem_Forest_NonForest': df_timeseries['variable'] = ['Cem_Forest'] * len(years)
+                else: df_timeseries['variable'] = [variable] * len(years)
                 df_timeseries['timescale'] = [timescale] * len(years)
-                #df_timeseries['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(years)    
                 df_timeseries['region'] = [ mask_3D.abbrevs.values[i] ] * len(years)    
-                #df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+                df_timeseries['year'] = years     
+                for m in range(12): df_timeseries[str(m+1)] = ts_filled_array[:,m]
+                df_timeseries['unit'] = units     
+                df_timeseries = df_timeseries.round(decimals=3)    
                 df_timeseries.to_csv( 'RUN/' + variable + '-' + 'timeseries' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.csv', index = False )
         		
             #----------------------------------------------------------------------------
             # SAVE: regional trend stats to CSV
             #----------------------------------------------------------------------------
         
-            df_stats = pd.DataFrame(columns=['fittype', 'tstart', 'tend', 'slope', 'intercept', 'corrcoef', 'R2adj', 'variable', 'timescale', 'region'])       
-            df_stats['fittype'] = fittypes
-            df_stats['tstart'] = tstarts
-            df_stats['tend'] = tends
-            df_stats['slope'] = slopes
-            df_stats['intercept'] = intercepts
-            df_stats['corrcoef'] = corrcoefs
-            df_stats['R2adj'] = R2adjs            
-            df_stats['variable'] = [variable] * len(fittypes)
-            df_stats['timescale'] = [timescale] * len(fittypes)
-            #df_stats['region'] = ['region' + '_' + str(i+1).zfill(2)] * len(fittypes)
-            df_stats['region'] = [ mask_3D.abbrevs.values[i] ] * len(fittypes)
-            df_stats = df_stats.round(decimals=6)    
-            #df_stats.to_csv( 'RUN/' + variable + '-' + 'stats' + '-' + timescale + '-' + 'region' + '-' + str(i+1).zfill(2) + '.csv', index = False )
+#            df_stats = pd.DataFrame(columns=['fittype', 'tstart', 'tend', 'slope', 'slope_lower', 'slope_upper', 'slope_mann_kendall', 'pvalue_slope', 'intercept', 'intercept_lower', 'intercept_upper', 'pvalue_intercept', 'SE', 'corrcoef', 'R2adj', 'variable', 'timescale', 'region'])       
+
+            df_stats = pd.DataFrame(columns=['variable', 'timescale', 'region', 'tstart', 'tend', 'statistic', 'value', 'unit'])            
+            if variable == 'BA_Forest_NonForest': df_stats['variable'] = [ 'BA_Forest' ] * 9
+            elif variable == 'Cem_Forest_NonForest': df_stats['variable'] = [ 'Cem_Forest' ] * 9
+            else: df_stats['variable'] = [ variable ] * 9
+            df_stats['timescale'] = [ timescale ] * 9
+            df_stats['region'] = [ mask_3D.abbrevs.values[i] ] * 9
+#            df_stats['fittype'] = fittypes
+#            df_stats['tstart'] = [ tstarts ] * 9
+#            df_stats['tend'] = [ tends ] * 9
+            df_stats['tstart'] = [ years[0] ] * 9
+            df_stats['tend'] = [ years[-1] ] * 9
+            df_stats['statistic'] = [ 'mann_kendall_slope', 'theil_sen_slope', 'theil_sen_slope_lower', 'theil_sen_slope_upper', 'theil_sen_pvalue_slope', 'theil_sen_intercept', 'theil_sen_intercept_lower', 'theil_sen_intercept_upper', 'residual_standard_deviation' ]
+            df_stats['value'] = np.array([ slopes_mann_kendall, slopes, slopes_lower, slopes_upper, pvalues_slope, intercepts, intercepts_lower, intercepts_upper, SEs ])
+#           df_stats['mann_kendall_slope'] = slopes_mann_kendall
+#           df_stats['theil_sen_slope'] = slopes
+#           df_stats['theil_sen_slope_lower'] = slopes_lower
+#           df_stats['theil_sen_slope_upper'] = slopes_upper
+#           df_stats['theil_sen_pvalue_slope'] = pvalues_slope            
+#           df_stats['theil_sen_intercept'] = intercepts
+#           df_stats['theil_sen_intercept_lower'] = intercepts_lower
+#           df_stats['theil_sen_intercept_upper'] = intercepts_upper
+#           df_stats['theil_sen_pvalue_intercept'] = pvalues_intercept            
+#           df_stats['residual_standard_deviation'] = SEs            
+#           df_stats['corrcoef'] = corrcoefs
+#           df_stats['R2adj'] = R2adjs            
+            df_stats['unit'] = [ unit + '/year', unit + '/year', unit + '/year', unit + '/year', '1', unit, unit, unit, unit ]             
+            df_stats = df_stats.round(decimals=6)   
             df_stats.to_csv( 'RUN/' + variable + '-' + 'stats' + '-' + timescale + '-' + mask_3D.abbrevs.values[i] + '.csv', index = False )
         
             #----------------------------------------------------------------------------
@@ -700,21 +772,26 @@ for variable in variable_list:
 
                             if (k < len(df_intervals) - 1):
                                 t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - pd.DateOffset( months = 6 )
+                                mask = np.isfinite( y[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] )
+                                t_interval = t_interval[mask]
                             else: 
                                 t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - pd.DateOffset( months = 6 )
+                                mask = np.isfinite( y[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] )                                
                                 t_interval.freq = 'AS-JUL'
-                                t_interval = t_interval.union([ t_interval[-1] + 1*t_interval.freq ])     
+                                t_interval = t_interval[mask].union([ t_interval[mask][-1] + 1*t_interval[mask].freq ]) 
 
                         else:
                                                     
                             if (k < len(df_intervals) - 1):
                                 t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] - pd.DateOffset( months = offset )
+                                mask = np.isfinite( y[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.StartDate[k+1] ) ] )                                
                                 t_interval.freq = 'AS'
-                                t_interval = t_interval.union([ t_interval[-1] + 1*t_interval.freq ])                            
+                                t_interval = t_interval[mask].union([ t_interval[mask][-1] + 1*t_interval[mask].freq ])                            
                             else: 
                                 t_interval = t[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] - pd.DateOffset( months = offset )
+                                mask = np.isfinite( y[ ( t>=df_intervals.StartDate[k] ) & ( t<=df_intervals.EndDate[k] ) ] )                                
                                 t_interval.freq = 'AS'
-                                t_interval = t_interval.union([ t_interval[-1] + 1*t_interval.freq ])                            
+                                t_interval = t_interval[mask].union([ t_interval[mask][-1] + 1*t_interval[mask].freq ])                            
                                                    
                         y_interval = [ df_intervals['5yr-mean'][k] ] * len( t_interval )
                         if k == 0:
@@ -723,9 +800,10 @@ for variable in variable_list:
                             if len( y_interval ) > 1:
                                 plt.plot( t_interval, y_interval, solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, zorder=4 )                    
                     
-                    # PLOT: robust OLS uncertainty band + p-value
-                                
-                    if pvalues_ols[1] <= alpha:
+                    # PLOT: robust OLS uncertainty band + p-value (if trend significant)
+                                                        
+                    #if pvalues_ols[1] <= alpha:
+                    if hypothesis_test_ols == 1:
 
                         plt.plot(t, y_ols, color='red', lw=3, label='Trend (if p < 0.05)', zorder=5)                            
                         plt.fill_between(t, lower_bound_ols, upper_bound_ols, color='red', alpha=0.1, label='95% confidence level', zorder=1)
@@ -733,12 +811,12 @@ for variable in variable_list:
                     # CREATE: static legend
         
                     legend_elements = [
-                        Line2D( [0], [0], marker='o', markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1, label=variablestr),
+                        Line2D( [0], [0], marker='o', markerfacecolor='lightgrey', ls='-', color='black', lw=2, alpha = 1, label=variablestr.capitalize()),
                         Line2D( [0], [1], solid_capstyle='butt', color='cyan', lw=10, alpha=0.5, label='Half-decade average'),
                         Line2D( [1], [0], color='red', lw=3, label='Trend (if p < 0.05)'),
                         patches.Patch( [1], [1], color='red', alpha=0.1, label='95% confidence level')                                
                     ]    
-                    plt.legend( handles = legend_elements, ncol=2, labelcolor = grey80, fontsize = fontsize, loc='center', bbox_to_anchor=(0.7, -0.2), fancybox = False, shadow = False, frameon=True )
+                    plt.legend( handles = legend_elements, ncol=2, labelcolor = grey80, fontsize = fontsize, loc='center', bbox_to_anchor=(0.68, -0.18), fancybox = False, shadow = False, frameon=True )
                         
                 else:
                     
@@ -778,13 +856,29 @@ for variable in variable_list:
             # CREDITS:    
         
             #plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(80,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
-            plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(580,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
-        
-            # LOGO:    
+            #plt.annotate( 'Data: Jones et al (2022)\ndoi: 10.1029/2020RG000726\nDataViz: Michael Taylor', xy=(580,60), xycoords='figure pixels', color = grey82, fontsize = fontsize )   
+
+            if (variable == 'BA_Total') | (variable == 'BA_Forest_NonForest'):
+                annotatestr = 'Updated from Jones et al. (10.1029/2020RG000726). Data from Giglio et al. (10.5067/MODIS/MCD64A1.061). Visualisation by Michael Taylor.'
+            elif (variable == 'Cem_Total') | (variable == 'Cem_Forest_NonForest'):                
+                annotatestr = 'Extended from Jones et al. (10.1029/2020RG000726). Data from van Wees et al. (10.5194/gmd-15-8411-2022). Visualisation by Michael Taylor.'
+            #plt.annotate( annotatestr, xy=(80,10), xycoords='figure pixels', color = grey80, fontsize = 12 )   
+            #plt.annotate( annotatestr, xy=(230,20), xycoords='figure pixels', color = grey80, fontsize = 12 )   
+            #plt.annotate( annotatestr, xy=(0,0.01), xycoords='figure fraction', color = grey80, fontsize = 12 )   
+            plt.annotate( annotatestr, xy=(-17,-110), xycoords='axes points', color = grey82, fontsize = 12 )   
+            
+            # LOGO (CRU):    
                 
             im = image.imread('logo-cru.png')
-            #imax = fig.add_axes([0.275, 0, 0.125, 0.125])
-            imax = fig.add_axes([0, 0, 0.125, 0.125])
+            #imax = fig.add_axes([0, 0, 0.125, 0.125])
+            imax = fig.add_axes([0.10, 0.01, 0.125, 0.125])
+            imax.set_axis_off()
+            imax.imshow(im, aspect="equal")
+
+            # LOGO (TYN):    
+                
+            im = image.imread('logo-tyn.png')
+            imax = fig.add_axes([0.23, 0.01, 0.125, 0.125])
             imax.set_axis_off()
             imax.imshow(im, aspect="equal")
         
